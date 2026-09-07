@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import re
-import shutil
 import sys
 from pathlib import Path
 
@@ -65,23 +64,10 @@ def set_project_mode(text: str, mode: str) -> str:
     return text.rstrip() + f"\n\n## Redesign mode\n\n{mode}\n"
 
 
-def write_template(src: Path, dst: Path, transform=None, force: bool = False) -> str:
-    if dst.exists() and not force:
-        return "preserved"
-    text = src.read_text(encoding="utf-8")
-    if transform is not None:
-        text = transform(text)
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    dst.write_text(text, encoding="utf-8")
-    return "created" if not dst.exists() else "written"
-
-
 def cmd_init(args: argparse.Namespace) -> int:
     target = Path(args.target).resolve()
     if not target.exists() or not target.is_dir():
         return fail(f"target directory does not exist: {target}")
-    if args.mode not in VALID_MODES:
-        return fail(f"invalid mode '{args.mode}'")
 
     workspace = target / ".DesignForge"
     workspace.mkdir(parents=True, exist_ok=True)
@@ -112,8 +98,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 def slugify(value: str) -> str:
     value = value.strip().lower()
-    value = re.sub(r"[^a-z0-9]+", "-", value).strip("-")
-    return value
+    return re.sub(r"[^a-z0-9]+", "-", value).strip("-")
 
 
 def next_phase_number(phases_dir: Path) -> int:
@@ -141,6 +126,9 @@ def cmd_phase(args: argparse.Namespace) -> int:
 
     phases_dir = workspace / "phases"
     number = args.number if args.number is not None else next_phase_number(phases_dir)
+    if number < 1:
+        return fail("phase number must be greater than zero")
+
     phase_id = f"{number:02d}-{slug}"
     phase_dir = phases_dir / phase_id
 
@@ -169,13 +157,6 @@ def cmd_state(args: argparse.Namespace) -> int:
     state_path = target / ".DesignForge" / "STATE.md"
     if not state_path.exists():
         return fail(".DesignForge/STATE.md not found; run init first")
-
-    if args.mode is not None and args.mode not in VALID_MODES:
-        return fail(f"invalid mode '{args.mode}'")
-    if args.workflow is not None and args.workflow not in VALID_WORKFLOWS:
-        return fail(f"invalid workflow '{args.workflow}'")
-    if args.status is not None and args.status not in VALID_STATUSES:
-        return fail(f"invalid status '{args.status}'")
 
     state = state_path.read_text(encoding="utf-8")
     if args.phase is not None:
