@@ -37,7 +37,7 @@ At minimum, workflows may create and maintain:
 
 Create artifacts progressively. Do not generate every possible file when it would add noise.
 
-See [workflow reference](references/WORKFLOW.md), [artifact contracts](references/ARTIFACTS.md), [visual QA evidence contract](references/VISUAL_QA.md), [renderer adapter contract](references/RENDER_ADAPTER.md), and [Playwright browser adapter reference](references/BROWSER_ADAPTER.md).
+See [workflow reference](references/WORKFLOW.md), [artifact contracts](references/ARTIFACTS.md), [visual QA evidence contract](references/VISUAL_QA.md), [renderer adapter contract](references/RENDER_ADAPTER.md), [render staging lifecycle](references/RENDER_STAGING.md), and [Playwright browser adapter reference](references/BROWSER_ADAPTER.md).
 
 ## Redesign freedom modes
 
@@ -153,6 +153,8 @@ When browser, emulator, simulator, screenshot, or other render-inspection toolin
 
 `visual render` and `visual capture` are intentionally separate. A renderer produces candidate evidence but cannot certify that inspection occurred. Do not call `visual capture` until the exact artifact has actually been viewed and assessed.
 
+Staging cleanup is also intentionally separate. Use `designforge visual staging list` to inspect pending renderer runs and `designforge visual staging clean` only with an explicit selector (`--run`, `--older-than-hours`, or `--all`). Never auto-delete a staging artifact merely because rendering or capture succeeded. Persistent `visual-evidence/` must never be cleaned through staging commands.
+
 For reachable web interfaces, DesignForge includes the optional `adapters/playwright_browser.py` provider. Use it only when Playwright and the requested browser are already available or may be installed within the task's authority. Supply an explicit HTTP(S) URL and viewport. Do not silently start project servers, execute guessed package scripts, or install browser dependencies merely because the adapter exists.
 
 `pass`, `pass-with-notes`, and `fail` require at least one checked capture backed by a real, non-empty render artifact. Compilation, tests, source inspection, or renderer success alone are not visual evidence.
@@ -161,7 +163,7 @@ When visual tooling is unavailable, use an explicit `blocked` or `unavailable` v
 
 The render provider is intentionally not fixed. Use browser, native preview, emulator, simulator, screenshot, or equivalent tooling available in the current runtime while keeping the same persistent evidence contract. Do not require a provider-specific dependency when the runtime already has another suitable renderer.
 
-See [visual QA evidence contract](references/VISUAL_QA.md), [renderer adapter contract](references/RENDER_ADAPTER.md), and [Playwright browser adapter reference](references/BROWSER_ADAPTER.md).
+See [visual QA evidence contract](references/VISUAL_QA.md), [renderer adapter contract](references/RENDER_ADAPTER.md), [render staging lifecycle](references/RENDER_STAGING.md), and [Playwright browser adapter reference](references/BROWSER_ADAPTER.md).
 
 ## Workflow selection
 
