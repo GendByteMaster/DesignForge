@@ -32,9 +32,11 @@ designforge/
 │   └── DESIGN_SYSTEM.md
 ├── references/
 │   ├── WORKFLOW.md
+│   ├── STATE_MACHINE.md
 │   └── ARTIFACTS.md
 ├── scripts/
-│   └── designforge.py
+│   ├── designforge.py
+│   └── state_machine.py
 └── workflows/
     ├── INIT.md
     ├── MAP.md
@@ -137,6 +139,27 @@ python designforge/scripts/designforge.py init /path/to/project --mode refactor
 
 It is idempotent by default. Existing root artifacts are preserved. Use `--force` only when intentionally resetting DesignForge-managed root templates.
 
+### Move through workflows safely
+
+Use `transition` for normal lifecycle progress:
+
+```bash
+python designforge/scripts/designforge.py transition map \
+  --target /path/to/project
+```
+
+The state machine rejects non-standard jumps that would skip major workflow prerequisites. Iterative loops such as `build -> review -> build` remain allowed.
+
+Use an explicit forced transition only for an intentional recovery path:
+
+```bash
+python designforge/scripts/designforge.py transition guard \
+  --target /path/to/project \
+  --force
+```
+
+See [`designforge/references/STATE_MACHINE.md`](designforge/references/STATE_MACHINE.md) for the transition graph.
+
 ### Create a phase
 
 ```bash
@@ -158,7 +181,9 @@ This creates a numbered phase such as:
 
 and moves `STATE.md` to the new phase planning state.
 
-### Update workflow state
+### Low-level state recovery
+
+`state` intentionally bypasses the transition graph and exists for recovery, stale-state repair, or explicit manual overrides:
 
 ```bash
 python designforge/scripts/designforge.py state \
@@ -167,6 +192,8 @@ python designforge/scripts/designforge.py state \
   --status in-progress \
   --phase 01-main-workspace
 ```
+
+Normal workflow progress should use `transition` instead.
 
 Supported redesign modes:
 
@@ -201,7 +228,13 @@ Validate the skill package and a target project's persistent workspace:
 python designforge/scripts/designforge.py validate --target /path/to/project
 ```
 
-Validation currently checks the core Skill metadata, required workflow/assets, and the runtime `PROJECT.md`/`STATE.md` state contract.
+Validation checks:
+
+- core Skill metadata;
+- required workflow and asset files;
+- valid mode/workflow/status values;
+- agreement between `PROJECT.md` and `STATE.md` redesign modes;
+- existence of an active phase directory when one is referenced.
 
 ## Redesign modes
 
@@ -232,10 +265,27 @@ Local checks:
 
 ```bash
 python -m py_compile designforge/scripts/designforge.py
+python -m py_compile designforge/scripts/state_machine.py
 python designforge/scripts/designforge.py validate
 python -m unittest discover -s tests -v
 ```
 
+The test suite includes an end-to-end lifecycle against a representative React/Vite-style project fixture:
+
+```text
+init
+  -> map
+  -> direct
+  -> systemize
+  -> phase/plan
+  -> build
+  -> review
+  -> guard
+  -> validate
+```
+
 ## Current development focus
 
-The v0.1 foundation now includes both the persistent Markdown workflow model and the first deterministic operational toolkit. The next layer is deeper state validation, workflow/state transition rules, installation/adoption guidance for coding agents, and an end-to-end test against a representative software project before the first PR to `master`.
+The v0.1 operational foundation now includes persistent artifacts, idempotent initialization, phase scaffolding, deterministic workflow transitions, structural validation, CI, and an end-to-end lifecycle test.
+
+The next development layer should focus on coding-agent installation/adoption, automated UI/codebase mapping helpers, and the first real DesignForge run against an external software project with rendered visual QA.
