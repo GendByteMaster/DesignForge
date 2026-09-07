@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -8,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "designforge" / "scripts" / "designforge.py"
+FIXTURE = ROOT / "tests" / "fixtures" / "sample-web-app"
 
 
 def run_cli(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -182,6 +184,33 @@ class DesignForgeCliTests(unittest.TestCase):
             result = run_cli("phase", "Navigation", "--target", tmp)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("run init first", result.stderr)
+
+    def test_end_to_end_representative_project_lifecycle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "sample-web-app"
+            shutil.copytree(FIXTURE, target)
+
+            steps = (
+                ("init", str(target), "--mode", "reimagine"),
+                ("transition", "map", "--target", str(target)),
+                ("transition", "direct", "--target", str(target)),
+                ("transition", "systemize", "--target", str(target)),
+                ("phase", "Main Workspace", "--target", str(target)),
+                ("transition", "build", "--target", str(target), "--status", "in-progress"),
+                ("transition", "review", "--target", str(target), "--status", "review"),
+                ("transition", "guard", "--target", str(target), "--status", "complete"),
+                ("validate", "--target", str(target)),
+            )
+
+            for step in steps:
+                result = run_cli(*step)
+                self.assertEqual(result.returncode, 0, f"{step}: {result.stderr}")
+
+            state = (target / ".DesignForge" / "STATE.md").read_text(encoding="utf-8")
+            self.assertIn("Current phase: 01-main-workspace", state)
+            self.assertIn("Current workflow: guard", state)
+            self.assertIn("Mode: reimagine", state)
+            self.assertIn("Status: complete", state)
 
 
 if __name__ == "__main__":
