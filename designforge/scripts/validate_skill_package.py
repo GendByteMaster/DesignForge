@@ -58,6 +58,19 @@ RENDER_ADAPTER_REFERENCE_SECTIONS = (
     "## Provider neutrality",
     "## Security and execution model",
 )
+BROWSER_ADAPTER_REFERENCE_SECTIONS = (
+    "# Playwright Browser Adapter",
+    "## Scope",
+    "## Optional dependency",
+    "## Canonical command",
+    "## Browser selection",
+    "## Viewport rules",
+    "## Capture controls",
+    "## URL boundary",
+    "## Output",
+    "## Failure behavior",
+    "## Recommended browser workflow",
+)
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, str], list[str]]:
@@ -150,6 +163,10 @@ def validate_visual_resources(errors: list[str]) -> None:
         if not (SKILL_ROOT / "scripts" / filename).is_file():
             errors.append(f"missing {label}: scripts/{filename}")
 
+    browser_adapter = SKILL_ROOT / "adapters" / "playwright_browser.py"
+    if not browser_adapter.is_file():
+        errors.append("missing optional browser renderer: adapters/playwright_browser.py")
+
     reference = SKILL_ROOT / "references" / "VISUAL_QA.md"
     if not reference.is_file():
         errors.append("missing visual QA reference contract: references/VISUAL_QA.md")
@@ -167,6 +184,15 @@ def validate_visual_resources(errors: list[str]) -> None:
         for heading in RENDER_ADAPTER_REFERENCE_SECTIONS:
             if heading not in renderer_text:
                 errors.append(f"references/RENDER_ADAPTER.md is missing {heading}")
+
+    browser_reference = SKILL_ROOT / "references" / "BROWSER_ADAPTER.md"
+    if not browser_reference.is_file():
+        errors.append("missing browser adapter reference contract: references/BROWSER_ADAPTER.md")
+    else:
+        browser_text = browser_reference.read_text(encoding="utf-8")
+        for heading in BROWSER_ADAPTER_REFERENCE_SECTIONS:
+            if heading not in browser_text:
+                errors.append(f"references/BROWSER_ADAPTER.md is missing {heading}")
 
 
 def validate() -> list[str]:
@@ -216,7 +242,7 @@ def validate() -> list[str]:
         if default_prompt and "$designforge" not in default_prompt:
             errors.append("OpenAI default_prompt must reference $designforge")
 
-    for required_dir in ("assets", "references", "scripts", "workflows"):
+    for required_dir in ("adapters", "assets", "references", "scripts", "workflows"):
         if not (SKILL_ROOT / required_dir).is_dir():
             errors.append(f"missing skill resource directory: {required_dir}/")
 
