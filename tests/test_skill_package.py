@@ -33,6 +33,14 @@ class SkillPackageContractTests(unittest.TestCase):
             with self.subTest(heading=heading):
                 self.assertIn(heading, reference_text)
 
+    def test_render_staging_manager_is_a_required_visual_resource(self) -> None:
+        staging = ROOT / "designforge" / "scripts" / "render_staging.py"
+        self.assertTrue(staging.is_file())
+        staging_text = staging.read_text(encoding="utf-8")
+        self.assertIn("render-staging", staging_text)
+        self.assertIn("--older-than-hours", staging_text)
+        self.assertIn("RUN_ID_PATTERN", staging_text)
+
     def test_playwright_browser_adapter_is_a_portable_optional_provider(self) -> None:
         validator = load_validator()
         adapter = ROOT / "designforge" / "adapters" / "playwright_browser.py"
