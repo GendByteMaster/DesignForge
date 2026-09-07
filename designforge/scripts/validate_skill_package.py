@@ -12,6 +12,21 @@ SKILL_MD = SKILL_ROOT / "SKILL.md"
 OPENAI_YAML = SKILL_ROOT / "agents" / "openai.yaml"
 ALLOWED_FRONTMATTER_KEYS = {"name", "description"}
 REQUIRED_OPENAI_KEYS = {"display_name", "short_description", "default_prompt"}
+MAPPING_TEMPLATES = (
+    "STACK.md",
+    "UI_ARCHITECTURE.md",
+    "COMPONENTS.md",
+    "STYLES.md",
+    "SCREENS.md",
+    "CONCERNS.md",
+)
+MAPPING_SECTIONS = (
+    "## Scope",
+    "## Verified findings",
+    "## Inferences",
+    "## Unknowns",
+    "## Evidence index",
+)
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, str], list[str]]:
@@ -59,6 +74,23 @@ def parse_openai_interface(text: str) -> tuple[dict[str, str], list[str]]:
         key, value = line.split(":", 1)
         values[key.strip()] = value.strip().strip('"').strip("'")
     return values, errors
+
+
+def validate_mapping_resources(errors: list[str]) -> None:
+    codebase_assets = SKILL_ROOT / "assets" / "codebase"
+    for name in MAPPING_TEMPLATES:
+        path = codebase_assets / name
+        if not path.is_file():
+            errors.append(f"missing mapping template: assets/codebase/{name}")
+            continue
+        text = path.read_text(encoding="utf-8")
+        for heading in MAPPING_SECTIONS:
+            if heading not in text:
+                errors.append(f"assets/codebase/{name} is missing {heading}")
+
+    validator = SKILL_ROOT / "scripts" / "validate_mapping_artifacts.py"
+    if not validator.is_file():
+        errors.append("missing mapping provenance validator: scripts/validate_mapping_artifacts.py")
 
 
 def validate() -> list[str]:
@@ -112,6 +144,7 @@ def validate() -> list[str]:
         if not (SKILL_ROOT / required_dir).is_dir():
             errors.append(f"missing skill resource directory: {required_dir}/")
 
+    validate_mapping_resources(errors)
     return errors
 
 
