@@ -34,6 +34,8 @@ The agent creates only useful interpreted files under `.DesignForge/codebase/`, 
 - `SCREENS.md`
 - `CONCERNS.md`
 
+Use the canonical provenance-aware templates under `designforge/assets/codebase/` when creating these artifacts. Each interpreted mapping artifact separates `Verified findings`, `Inferences`, `Unknowns`, and an `Evidence index`.
+
 Update `.DesignForge/STATE.md`.
 
 ## Procedure
@@ -64,8 +66,19 @@ Update `.DesignForge/STATE.md`.
     - duplicate dialogs/menus/popovers;
     - unclear navigation or information architecture.
 12. Map important screens and what users are trying to accomplish on each.
-13. Record evidence, not vague aesthetic criticism.
-14. Update `STATE.md` with mapping completion, material concerns, and next workflow.
+13. Write interpreted findings using the mapping provenance contract:
+    - source-confirmed facts under `Verified findings`;
+    - agent interpretation under `Inferences`;
+    - material gaps under `Unknowns`;
+    - repository-relative source/test/render evidence under `Evidence index`.
+14. When interpreted mapping artifacts exist and the validator is available, run:
+
+   ```bash
+   python designforge/scripts/validate_mapping_artifacts.py /path/to/project
+   ```
+
+   Fix structural provenance failures before declaring mapping complete. Passing this validator confirms the document contract and presence of evidence references; it does not prove semantic correctness.
+15. Update `STATE.md` with mapping completion, material concerns, and next workflow.
 
 ## Scanner scope
 
@@ -121,6 +134,17 @@ Those facts do **not** by themselves prove that:
 
 The agent must inspect relevant implementation before promoting scanner signals into `STACK.md`, `COMPONENTS.md`, `STYLES.md`, `SCREENS.md`, or `CONCERNS.md`.
 
+## Provenance boundary
+
+The provenance validator is intentionally mechanical. It can verify that interpreted mapping documents use the required sections and that substantive verified list items have at least one path-like reference in the evidence index. It cannot determine whether the cited source actually proves the finding.
+
+Therefore:
+
+- never use validator success as a substitute for source inspection;
+- never cite `EVIDENCE.md` alone as proof of an inferred architecture or design defect;
+- prefer stable repository paths plus symbols/selectors/routes/tests over fragile line-only citations;
+- re-check mappings after material codebase changes before reusing them in a redesign plan.
+
 ## Rules
 
 - Do not redesign while mapping unless the user explicitly asks for immediate fixes.
@@ -130,6 +154,7 @@ The agent must inspect relevant implementation before promoting scanner signals 
 - Repository reality overrides stale `.DesignForge/codebase/` documents.
 - Generated `EVIDENCE.md` may be refreshed by the scanner; do not store durable human decisions there.
 - Never recursively inspect generated/dependency directories merely to increase manifest recall.
+- Never promote an inference to verified only because it appears plausible.
 
 ## Completion
 
@@ -141,4 +166,8 @@ Mapping is complete when a new agent can answer:
 - where styling conventions live;
 - which screens and flows matter most;
 - where design/system debt is concentrated;
-- what must be preserved or migrated during redesign.
+- what must be preserved or migrated during redesign;
+- which statements are verified, inferred, or still unknown;
+- which repository evidence supports each substantive verified finding.
+
+When interpreted mapping artifacts exist and the validator is available, provenance validation must pass before the workflow is marked complete.
