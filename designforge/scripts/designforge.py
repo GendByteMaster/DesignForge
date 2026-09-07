@@ -13,6 +13,8 @@ from mapping_freshness import check as check_mapping_freshness
 from mapping_freshness import stamp as stamp_mapping_freshness
 from render_adapter import DEFAULT_TIMEOUT_SECONDS as DEFAULT_RENDER_TIMEOUT_SECONDS
 from render_adapter import run_adapter as run_render_adapter
+from render_staging import clean_runs as clean_render_staging_runs
+from render_staging import list_runs as list_render_staging_runs
 from state_machine import (
     VALID_MODES,
     VALID_STATUSES,
@@ -183,6 +185,37 @@ def cmd_visual(args: argparse.Namespace) -> int:
         assert artifact is not None
         print(f"Render artifact: {artifact}")
         print("Inspect this artifact before registering it with 'designforge visual capture'.")
+        return 0
+
+    if args.action == "staging":
+        if args.staging_action == "list":
+            runs, errors = list_render_staging_runs(target)
+            if errors:
+                for error in errors:
+                    print(f"error: {error}", file=sys.stderr)
+                return 1
+            if not runs:
+                print("No renderer staging runs")
+                return 0
+            for run in runs:
+                print(f"{run.run_id}\t{run.size_bytes}\t{run.path}")
+            return 0
+
+        removed, errors = clean_render_staging_runs(
+            target,
+            run_id=args.run,
+            older_than_hours=args.older_than_hours,
+            all_runs=args.all,
+        )
+        if errors:
+            for error in errors:
+                print(f"error: {error}", file=sys.stderr)
+            return 1
+        if not removed:
+            print("No renderer staging runs matched the cleanup selector")
+            return 0
+        for run_id in removed:
+            print(f"Removed renderer staging run: {run_id}")
         return 0
 
     if args.action == "capture":
@@ -367,6 +400,8 @@ def validate_skill() -> list[str]:
         errors.append("missing visual QA validator")
     if not (scripts_dir / "render_adapter.py").exists():
         errors.append("missing renderer adapter runner")
+    if not (scripts_dir / "render_staging.py").exists():
+        errors.append("missing render staging manager")
     if not (ASSETS_DIR / "reviews" / "VISUAL_QA.md").exists():
         errors.append("missing visual QA template")
     return errors
@@ -460,6 +495,21 @@ def build_parser() -> argparse.ArgumentParser:
     visual_render_parser.add_argument("--timeout", type=int, default=DEFAULT_RENDER_TIMEOUT_SECONDS)
     visual_render_parser.add_argument("--adapter", nargs=argparse.REMAINDER, required=True, help="adapter argv; place this option last")
     visual_render_parser.set_defaults(func=cmd_visual)
+
+    visual_staging_parser = visual_subparsers.add_parser("staging", help="inspect or explicitly clean uninspected renderer staging runs")
+    visual_staging_subparsers = visual_staging_parser.add_subparsers(dest="staging_action", required=True)
+
+    visual_staging_list_parser = visual_staging_subparsers.add_parser("list", help="list managed renderer staging runs")
+    visual_staging_list_parser.add_argument("target", nargs="?", default=".")
+    visual_staging_list_parser.set_defaults(func=cmd_visual)
+
+    visual_staging_clean_parser = visual_staging_subparsers.add_parser("clean", help="explicitly remove selected managed renderer staging runs")
+    visual_staging_clean_parser.add_argument("target", nargs="?", default=".")
+    visual_staging_selector = visual_staging_clean_parser.add_mutually_exclusive_group(required=True)
+    visual_staging_selector.add_argument("--run")
+    visual_staging_selector.add_argument("--older-than-hours", type=float)
+    visual_staging_selector.add_argument("--all", action="store_true")
+    visual_staging_clean_parser.set_defaults(func=cmd_visual)
 
     visual_capture_parser = visual_subparsers.add_parser("capture", help="import a rendered screenshot or video and register it as inspected evidence")
     visual_capture_parser.add_argument("source")
