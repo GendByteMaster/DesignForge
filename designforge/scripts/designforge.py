@@ -18,6 +18,9 @@ from state_machine import (
     allowed_targets,
     can_transition,
 )
+from visual_qa import evidence_dir as visual_evidence_dir
+from visual_qa import init_review as init_visual_review
+from visual_qa import validate_review as validate_visual_review
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 ASSETS_DIR = SKILL_ROOT / "assets"
@@ -139,6 +142,31 @@ def cmd_mapping(args: argparse.Namespace) -> int:
             print(f"stale: {error}", file=sys.stderr)
         return 1
     print("DesignForge mapping freshness check passed")
+    return 0
+
+
+def cmd_visual(args: argparse.Namespace) -> int:
+    target = Path(args.target).resolve()
+    if not target.exists() or not target.is_dir():
+        return fail(f"target directory does not exist: {target}")
+
+    if args.action == "init":
+        destination, errors = init_visual_review(target, args.phase, args.force)
+        if errors:
+            for error in errors:
+                print(f"error: {error}", file=sys.stderr)
+            return 1
+        assert destination is not None
+        print(f"Visual QA artifact: {destination}")
+        print(f"Visual evidence directory: {visual_evidence_dir(target, args.phase)}")
+        return 0
+
+    errors = validate_visual_review(target, args.phase)
+    if errors:
+        for error in errors:
+            print(f"error: {error}", file=sys.stderr)
+        return 1
+    print("DesignForge visual QA validation passed")
     return 0
 
 
@@ -285,6 +313,10 @@ def validate_skill() -> list[str]:
         errors.append("missing codebase evidence scanner")
     if not (scripts_dir / "mapping_freshness.py").exists():
         errors.append("missing mapping freshness checker")
+    if not (scripts_dir / "visual_qa.py").exists():
+        errors.append("missing visual QA validator")
+    if not (ASSETS_DIR / "reviews" / "VISUAL_QA.md").exists():
+        errors.append("missing visual QA template")
     return errors
 
 
@@ -357,6 +389,13 @@ def build_parser() -> argparse.ArgumentParser:
     mapping_parser.add_argument("action", choices=("stamp", "check"))
     mapping_parser.add_argument("target", nargs="?", default=".")
     mapping_parser.set_defaults(func=cmd_mapping)
+
+    visual_parser = subparsers.add_parser("visual", help="scaffold or validate provider-neutral visual QA evidence")
+    visual_parser.add_argument("action", choices=("init", "validate"))
+    visual_parser.add_argument("target", nargs="?", default=".")
+    visual_parser.add_argument("--phase")
+    visual_parser.add_argument("--force", action="store_true", help="overwrite the managed VISUAL_QA.md scaffold during init")
+    visual_parser.set_defaults(func=cmd_visual)
 
     phase_parser = subparsers.add_parser("phase", help="create a numbered DesignForge phase")
     phase_parser.add_argument("name")
