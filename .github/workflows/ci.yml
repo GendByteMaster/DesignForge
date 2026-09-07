@@ -31,8 +31,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Compile CLI
-        run: python -m py_compile designforge/scripts/designforge.py
+      - name: Compile operational scripts
+        run: |
+          python -m py_compile designforge/scripts/designforge.py
+          python -m py_compile designforge/scripts/state_machine.py
+          python -m py_compile designforge/scripts/evidence_scanner.py
 
       - name: Validate skill package
         run: python designforge/scripts/designforge.py validate
