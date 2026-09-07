@@ -92,7 +92,38 @@ class DesignForgeCliTests(unittest.TestCase):
             self.assertIn("Current workflow: plan", state)
             self.assertIn("Status: ready", state)
 
-    def test_state_updates_known_fields(self) -> None:
+    def test_phase_rejects_non_positive_number(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.assertEqual(run_cli("init", str(target), "--mode", "refactor").returncode, 0)
+            result = run_cli("phase", "Navigation", "--target", str(target), "--number", "0")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("greater than zero", result.stderr)
+
+    def test_transition_allows_normal_lifecycle_step(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.assertEqual(run_cli("init", str(target), "--mode", "refactor").returncode, 0)
+
+            result = run_cli("transition", "map", "--target", str(target))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            state = (target / ".DesignForge" / "STATE.md").read_text(encoding="utf-8")
+            self.assertIn("Current workflow: map", state)
+            self.assertIn("Status: ready", state)
+
+    def test_transition_rejects_invalid_jump_without_force(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.assertEqual(run_cli("init", str(target), "--mode", "refactor").returncode, 0)
+
+            result = run_cli("transition", "guard", "--target", str(target))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("not allowed", result.stderr)
+
+            forced = run_cli("transition", "guard", "--target", str(target), "--force")
+            self.assertEqual(forced.returncode, 0, forced.stderr)
+
+    def test_state_remains_low_level_recovery_tool(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)
             self.assertEqual(run_cli("init", str(target), "--mode", "refactor").returncode, 0)
@@ -105,13 +136,9 @@ class DesignForgeCliTests(unittest.TestCase):
                 "build",
                 "--status",
                 "in-progress",
-                "--phase",
-                "02-navigation",
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-
             state = (target / ".DesignForge" / "STATE.md").read_text(encoding="utf-8")
-            self.assertIn("Current phase: 02-navigation", state)
             self.assertIn("Current workflow: build", state)
             self.assertIn("Status: in-progress", state)
 
@@ -124,6 +151,31 @@ class DesignForgeCliTests(unittest.TestCase):
             self.assertEqual(run_cli("init", str(target), "--mode", "conservative").returncode, 0)
             workspace = run_cli("validate", "--target", str(target))
             self.assertEqual(workspace.returncode, 0, workspace.stderr)
+
+    def test_validate_detects_mode_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.assertEqual(run_cli("init", str(target), "--mode", "refactor").returncode, 0)
+            state_path = target / ".DesignForge" / "STATE.md"
+            state = state_path.read_text(encoding="utf-8").replace("Mode: refactor", "Mode: reimagine")
+            state_path.write_text(state, encoding="utf-8")
+
+            result = run_cli("validate", "--target", str(target))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("does not match", result.stderr)
+
+    def test_validate_detects_missing_active_phase_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.assertEqual(run_cli("init", str(target), "--mode", "refactor").returncode, 0)
+            self.assertEqual(
+                run_cli("state", "--target", str(target), "--phase", "03-missing-phase").returncode,
+                0,
+            )
+
+            result = run_cli("validate", "--target", str(target))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing phase directory", result.stderr)
 
     def test_phase_requires_initialized_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
