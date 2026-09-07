@@ -35,6 +35,16 @@ VISUAL_QA_SECTIONS = (
     "## Unverified states",
     "## Verdict",
 )
+VISUAL_QA_REFERENCE_SECTIONS = (
+    "# Visual QA Evidence Contract",
+    "## Scope",
+    "## Canonical commands",
+    "## Capture matrix",
+    "## Verdicts",
+    "## Mechanical validation",
+    "## Workflow rules",
+    "## Provider neutrality",
+)
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, str], list[str]]:
@@ -121,6 +131,15 @@ def validate_visual_resources(errors: list[str]) -> None:
 
     if not (SKILL_ROOT / "scripts" / "visual_qa.py").is_file():
         errors.append("missing visual QA validator: scripts/visual_qa.py")
+
+    reference = SKILL_ROOT / "references" / "VISUAL_QA.md"
+    if not reference.is_file():
+        errors.append("missing visual QA reference contract: references/VISUAL_QA.md")
+    else:
+        reference_text = reference.read_text(encoding="utf-8")
+        for heading in VISUAL_QA_REFERENCE_SECTIONS:
+            if heading not in reference_text:
+                errors.append(f"references/VISUAL_QA.md is missing {heading}")
 
 
 def validate() -> list[str]:
