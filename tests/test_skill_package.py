@@ -41,6 +41,15 @@ class SkillPackageContractTests(unittest.TestCase):
         self.assertIn("--older-than-hours", staging_text)
         self.assertIn("RUN_ID_PATTERN", staging_text)
 
+    def test_render_staging_reference_is_required(self) -> None:
+        validator = load_validator()
+        reference = ROOT / "designforge" / "references" / "RENDER_STAGING.md"
+        self.assertTrue(reference.is_file())
+        reference_text = reference.read_text(encoding="utf-8")
+        for heading in validator.RENDER_STAGING_REFERENCE_SECTIONS:
+            with self.subTest(heading=heading):
+                self.assertIn(heading, reference_text)
+
     def test_playwright_browser_adapter_is_a_portable_optional_provider(self) -> None:
         validator = load_validator()
         adapter = ROOT / "designforge" / "adapters" / "playwright_browser.py"
