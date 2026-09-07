@@ -58,6 +58,16 @@ RENDER_ADAPTER_REFERENCE_SECTIONS = (
     "## Provider neutrality",
     "## Security and execution model",
 )
+RENDER_STAGING_REFERENCE_SECTIONS = (
+    "# Render Staging Lifecycle",
+    "## Scope",
+    "## Managed run identity",
+    "## Listing",
+    "## Explicit cleanup",
+    "## Safety boundaries",
+    "## Relationship to Visual QA",
+    "## Provider neutrality",
+)
 BROWSER_ADAPTER_REFERENCE_SECTIONS = (
     "# Playwright Browser Adapter",
     "## Scope",
@@ -185,6 +195,15 @@ def validate_visual_resources(errors: list[str]) -> None:
         for heading in RENDER_ADAPTER_REFERENCE_SECTIONS:
             if heading not in renderer_text:
                 errors.append(f"references/RENDER_ADAPTER.md is missing {heading}")
+
+    staging_reference = SKILL_ROOT / "references" / "RENDER_STAGING.md"
+    if not staging_reference.is_file():
+        errors.append("missing render staging reference contract: references/RENDER_STAGING.md")
+    else:
+        staging_text = staging_reference.read_text(encoding="utf-8")
+        for heading in RENDER_STAGING_REFERENCE_SECTIONS:
+            if heading not in staging_text:
+                errors.append(f"references/RENDER_STAGING.md is missing {heading}")
 
     browser_reference = SKILL_ROOT / "references" / "BROWSER_ADAPTER.md"
     if not browser_reference.is_file():
