@@ -8,6 +8,7 @@ import re
 import sys
 from pathlib import Path
 
+from evidence_scanner import write_evidence
 from state_machine import (
     VALID_MODES,
     VALID_STATUSES,
@@ -101,6 +102,18 @@ def cmd_init(args: argparse.Namespace) -> int:
     print(f"DesignForge workspace: {workspace}")
     print(f"PROJECT.md: {'overwritten' if project_exists and args.force else 'preserved' if project_exists else 'created'}")
     print(f"STATE.md: {'overwritten' if state_exists and args.force else 'preserved' if state_exists else 'created'}")
+    return 0
+
+
+def cmd_scan(args: argparse.Namespace) -> int:
+    target = Path(args.target).resolve()
+    if not target.exists() or not target.is_dir():
+        return fail(f"target directory does not exist: {target}")
+    try:
+        destination = write_evidence(target)
+    except FileNotFoundError as exc:
+        return fail(str(exc))
+    print(f"Codebase evidence: {destination}")
     return 0
 
 
@@ -240,8 +253,11 @@ def validate_skill() -> list[str]:
         if not path.exists():
             errors.append(f"missing asset: assets/{asset}")
 
-    if not (Path(__file__).resolve().parent / "state_machine.py").exists():
+    scripts_dir = Path(__file__).resolve().parent
+    if not (scripts_dir / "state_machine.py").exists():
         errors.append("missing operational state machine")
+    if not (scripts_dir / "evidence_scanner.py").exists():
+        errors.append("missing codebase evidence scanner")
     return errors
 
 
@@ -305,6 +321,10 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--mode", choices=sorted(VALID_MODES), default="refactor")
     init_parser.add_argument("--force", action="store_true", help="overwrite managed root artifacts")
     init_parser.set_defaults(func=cmd_init)
+
+    scan_parser = subparsers.add_parser("scan", help="collect deterministic UI/codebase evidence for the map workflow")
+    scan_parser.add_argument("target", nargs="?", default=".")
+    scan_parser.set_defaults(func=cmd_scan)
 
     phase_parser = subparsers.add_parser("phase", help="create a numbered DesignForge phase")
     phase_parser.add_argument("name")
