@@ -31,7 +31,14 @@ designforge/
 │   ├── STATE.md
 │   ├── ROADMAP.md
 │   ├── DESIGN.md
-│   └── DESIGN_SYSTEM.md
+│   ├── DESIGN_SYSTEM.md
+│   └── codebase/
+│       ├── STACK.md
+│       ├── UI_ARCHITECTURE.md
+│       ├── COMPONENTS.md
+│       ├── STYLES.md
+│       ├── SCREENS.md
+│       └── CONCERNS.md
 ├── references/
 │   ├── WORKFLOW.md
 │   ├── STATE_MACHINE.md
@@ -42,6 +49,7 @@ designforge/
 │   ├── installer.py
 │   ├── install_skill.py
 │   ├── state_machine.py
+│   ├── validate_mapping_artifacts.py
 │   └── validate_skill_package.py
 └── workflows/
     ├── INIT.md
@@ -135,6 +143,7 @@ The lifecycle is resumable. A workflow may skip stages that are already complete
 - **Progressive context loading** — load `STATE.md`, the active phase, and only relevant design contracts.
 - **Guard against design drift** — recent changes should be checked against the active design system and Design DNA.
 - **Evidence before conclusions** — deterministic scanners may collect repository signals, but agents must verify relevant source before turning signals into design findings.
+- **Provenance before persistence** — durable mapping separates verified facts, inferences, unknowns, and the repository evidence supporting verified findings.
 
 ## Runtime workspace
 
@@ -148,7 +157,13 @@ A target project may progressively create a workspace such as:
 ├── DESIGN.md
 ├── DESIGN_SYSTEM.md
 ├── codebase/
-│   └── EVIDENCE.md
+│   ├── EVIDENCE.md
+│   ├── STACK.md
+│   ├── UI_ARCHITECTURE.md
+│   ├── COMPONENTS.md
+│   ├── STYLES.md
+│   ├── SCREENS.md
+│   └── CONCERNS.md
 ├── research/
 ├── system/
 ├── phases/
@@ -165,6 +180,7 @@ Not every file or directory should be created immediately. DesignForge creates a
 - `DESIGN.md` — canonical design thesis and Design DNA.
 - `DESIGN_SYSTEM.md` — high-level design-system contract.
 - `codebase/EVIDENCE.md` — refreshable scanner output containing observable repository signals, not durable design conclusions.
+- interpreted `codebase/*.md` maps — durable source-verified codebase understanding with explicit provenance and uncertainty boundaries.
 
 ## Operational toolkit
 
@@ -240,6 +256,28 @@ The scanner excludes common dependency/generated directories such as `.git`, `.D
 
 `EVIDENCE.md` is intentionally **not** a design audit. A package being installed does not prove it is actively used; a color literal does not automatically mean design-system drift; an entry candidate does not prove it is the active application shell; and a package found in one nested app does not automatically describe every UI surface in a multi-stack repository. The `map` workflow must verify relevant source files before creating durable findings in `STACK.md`, `UI_ARCHITECTURE.md`, `COMPONENTS.md`, `STYLES.md`, `SCREENS.md`, or `CONCERNS.md`.
 
+### Interpreted mapping provenance
+
+The six canonical mapping templates under `designforge/assets/codebase/` use the same minimal contract:
+
+```text
+Scope
+Verified findings
+Inferences
+Unknowns
+Evidence index
+```
+
+This prevents repository facts from being silently mixed with agent assumptions. A verified finding should be an explicit Markdown list item and must be traceable to repository-relative evidence. Inferences remain interpretations until confirmed, and unresolved gaps remain visible under `Unknowns`.
+
+Validate interpreted mapping artifacts with:
+
+```bash
+python designforge/scripts/validate_mapping_artifacts.py /path/to/project
+```
+
+The validator is deliberately read-only. It checks the document contract and requires path-like provenance when substantive verified findings exist. It does **not** decide whether a cited source actually proves a finding, so source inspection remains the agent's responsibility.
+
 ### Create a phase
 
 ```bash
@@ -308,6 +346,12 @@ Validate the canonical portable Agent Skills package and OpenAI interface metada
 python designforge/scripts/validate_skill_package.py
 ```
 
+Validate interpreted mapping provenance in a target project:
+
+```bash
+python designforge/scripts/validate_mapping_artifacts.py /path/to/project
+```
+
 Validate runtime structure plus a target project's persistent workspace:
 
 ```bash
@@ -319,6 +363,8 @@ Validation covers:
 - canonical `SKILL.md` metadata;
 - required `agents/openai.yaml` interface metadata;
 - required workflow, asset, reference, and script resources;
+- required provenance-aware mapping templates and their common sections;
+- mapping evidence presence for substantive verified findings;
 - valid mode/workflow/status values;
 - agreement between `PROJECT.md` and `STATE.md` redesign modes;
 - existence of an active phase directory when one is referenced.
@@ -334,7 +380,7 @@ DesignForge supports three freedom levels:
 ## Workflow playbooks
 
 - `init` — initialize `.DesignForge/` and establish persistent project state.
-- `map` — collect evidence, inspect, and map an existing UI/codebase.
+- `map` — collect evidence, inspect, and produce provenance-aware interpreted UI/codebase maps.
 - `discuss` — persist design decisions, constraints, preferences, and rejected directions.
 - `direct` — create or refine the product-specific visual/UX direction.
 - `systemize` — translate the direction into design-system contracts.
@@ -357,6 +403,7 @@ python -m py_compile designforge/scripts/evidence_scanner.py
 python -m py_compile designforge/scripts/installer.py
 python -m py_compile designforge/scripts/install_skill.py
 python -m py_compile designforge/scripts/validate_skill_package.py
+python -m py_compile designforge/scripts/validate_mapping_artifacts.py
 python designforge/scripts/designforge.py validate
 python designforge/scripts/validate_skill_package.py
 python -m unittest discover -s tests -v
@@ -369,6 +416,8 @@ The test suite includes:
 - phase scaffolding;
 - deterministic UI/codebase evidence scanning, including bounded nested manifests and entry/shell candidates;
 - generated/dependency directory exclusion and nested-manifest depth limits;
+- provenance-aware mapping artifact validation;
+- verified-finding evidence requirements and uncertainty-section contracts;
 - Codex and Claude project-local skill installation;
 - installation conflict/force behavior;
 - an end-to-end lifecycle against a representative React/Vite-style project fixture.
@@ -379,6 +428,8 @@ End-to-end lifecycle:
 init
   -> map
   -> scan evidence
+  -> verify source
+  -> validate mapping provenance
   -> direct
   -> systemize
   -> phase/plan
@@ -390,6 +441,6 @@ init
 
 ## Current development focus
 
-The v0.1 foundation now includes persistent artifacts, idempotent initialization, phase scaffolding, deterministic workflow transitions, structural validation, bounded multi-stack UI/codebase evidence collection, canonical skill-package validation, project-local Codex/Claude installation, CI, and an end-to-end lifecycle test.
+The v0.1 foundation now includes persistent artifacts, idempotent initialization, phase scaffolding, deterministic workflow transitions, structural validation, bounded multi-stack UI/codebase evidence collection, provenance-aware interpreted mapping contracts, canonical skill-package validation, project-local Codex/Claude installation, CI, and an end-to-end lifecycle test.
 
-The next major proof point is trustworthy interpreted mapping: turning scanner evidence plus verified source inspection into durable `STACK.md`, `UI_ARCHITECTURE.md`, `COMPONENTS.md`, `STYLES.md`, `SCREENS.md`, and `CONCERNS.md` artifacts with clear provenance. Rendered visual QA should follow once those mapping contracts are reliable. The scanner itself should remain an evidence collector rather than evolve into an unreliable heuristic design judge.
+The next major proof point is **mapping freshness and visual verification**: DesignForge should recognize when durable codebase maps may be stale after material repository changes, and later connect implementation/review workflows to rendered visual evidence where the runtime provides browser, screenshot, or native-app inspection tooling. The deterministic scanner should remain an evidence collector rather than evolve into an unreliable heuristic design judge.
