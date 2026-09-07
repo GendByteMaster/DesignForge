@@ -8,20 +8,13 @@ import re
 import sys
 from pathlib import Path
 
-VALID_MODES = {"conservative", "refactor", "reimagine"}
-VALID_WORKFLOWS = {
-    "init",
-    "map",
-    "discuss",
-    "direct",
-    "systemize",
-    "plan",
-    "build",
-    "review",
-    "continue",
-    "guard",
-}
-VALID_STATUSES = {"initialized", "ready", "in-progress", "blocked", "review", "complete"}
+from state_machine import (
+    VALID_MODES,
+    VALID_STATUSES,
+    VALID_WORKFLOWS,
+    allowed_targets,
+    can_transition,
+)
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 ASSETS_DIR = SKILL_ROOT / "assets"
@@ -51,6 +44,14 @@ def replace_prefixed_line(text: str, prefix: str, value: str) -> str:
     return f"{text}{suffix}{replacement}\n"
 
 
+def read_prefixed_line(text: str, prefix: str) -> str | None:
+    match = re.search(rf"^{re.escape(prefix)}(.*)$", text, re.MULTILINE)
+    if not match:
+        return None
+    value = match.group(1).strip()
+    return value or None
+
+
 def set_project_mode(text: str, mode: str) -> str:
     marker = "<!-- conservative | refactor | reimagine -->"
     if marker in text:
@@ -62,6 +63,13 @@ def set_project_mode(text: str, mode: str) -> str:
         if section.search(text):
             return section.sub(rf"\1\n{mode}\n", text, count=1)
     return text.rstrip() + f"\n\n## Redesign mode\n\n{mode}\n"
+
+
+def extract_project_mode(text: str) -> str | None:
+    match = re.search(r"^## Redesign mode\s*\n+\s*([^\n#<][^\n]*)", text, re.MULTILINE)
+    if not match:
+        return None
+    return match.group(1).strip()
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -172,6 +180,28 @@ def cmd_state(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_transition(args: argparse.Namespace) -> int:
+    target = Path(args.target).resolve()
+    state_path = target / ".DesignForge" / "STATE.md"
+    if not state_path.exists():
+        return fail(".DesignForge/STATE.md not found; run init first")
+
+    state = state_path.read_text(encoding="utf-8")
+    current = read_prefixed_line(state, "Current workflow: ")
+    if current not in VALID_WORKFLOWS:
+        return fail("STATE.md contains an invalid or missing Current workflow")
+
+    if not args.force and not can_transition(current, args.workflow):
+        allowed = ", ".join(allowed_targets(current)) or "none"
+        return fail(f"transition {current} -> {args.workflow} is not allowed; allowed: {allowed}")
+
+    state = replace_prefixed_line(state, "Current workflow: ", args.workflow)
+    state = replace_prefixed_line(state, "Status: ", args.status)
+    state_path.write_text(state, encoding="utf-8")
+    print(f"Transitioned workflow: {current} -> {args.workflow}")
+    return 0
+
+
 def parse_frontmatter(text: str) -> dict[str, str]:
     if not text.startswith("---\n"):
         return {}
@@ -209,6 +239,9 @@ def validate_skill() -> list[str]:
         path = ASSETS_DIR / asset
         if not path.exists():
             errors.append(f"missing asset: assets/{asset}")
+
+    if not (Path(__file__).resolve().parent / "state_machine.py").exists():
+        errors.append("missing operational state machine")
     return errors
 
 
@@ -222,17 +255,30 @@ def validate_workspace(target: Path) -> list[str]:
             errors.append(f".DesignForge/{name} is missing")
 
     state_path = workspace / "STATE.md"
+    state_mode: str | None = None
     if state_path.exists():
         state = state_path.read_text(encoding="utf-8")
-        mode_match = re.search(r"^Mode:\s*(.+)$", state, re.MULTILINE)
-        workflow_match = re.search(r"^Current workflow:\s*(.+)$", state, re.MULTILINE)
-        status_match = re.search(r"^Status:\s*(.+)$", state, re.MULTILINE)
-        if not mode_match or mode_match.group(1).strip() not in VALID_MODES:
+        state_mode = read_prefixed_line(state, "Mode: ")
+        workflow = read_prefixed_line(state, "Current workflow: ")
+        status = read_prefixed_line(state, "Status: ")
+        phase = read_prefixed_line(state, "Current phase: ")
+
+        if state_mode not in VALID_MODES:
             errors.append("STATE.md contains an invalid or missing Mode")
-        if not workflow_match or workflow_match.group(1).strip() not in VALID_WORKFLOWS:
+        if workflow not in VALID_WORKFLOWS:
             errors.append("STATE.md contains an invalid or missing Current workflow")
-        if not status_match or status_match.group(1).strip() not in VALID_STATUSES:
+        if status not in VALID_STATUSES:
             errors.append("STATE.md contains an invalid or missing Status")
+        if phase and phase != "not-started" and not (workspace / "phases" / phase).is_dir():
+            errors.append(f"STATE.md references a missing phase directory: {phase}")
+
+    project_path = workspace / "PROJECT.md"
+    if project_path.exists():
+        project_mode = extract_project_mode(project_path.read_text(encoding="utf-8"))
+        if project_mode not in VALID_MODES:
+            errors.append("PROJECT.md contains an invalid or missing Redesign mode")
+        elif state_mode in VALID_MODES and project_mode != state_mode:
+            errors.append("PROJECT.md Redesign mode does not match STATE.md Mode")
     return errors
 
 
@@ -267,7 +313,14 @@ def build_parser() -> argparse.ArgumentParser:
     phase_parser.add_argument("--force", action="store_true")
     phase_parser.set_defaults(func=cmd_phase)
 
-    state_parser = subparsers.add_parser("state", help="update compact workflow state")
+    transition_parser = subparsers.add_parser("transition", help="move to an allowed workflow state")
+    transition_parser.add_argument("workflow", choices=sorted(VALID_WORKFLOWS))
+    transition_parser.add_argument("--target", default=".")
+    transition_parser.add_argument("--status", choices=sorted(VALID_STATUSES), default="ready")
+    transition_parser.add_argument("--force", action="store_true", help="allow an explicit non-standard transition")
+    transition_parser.set_defaults(func=cmd_transition)
+
+    state_parser = subparsers.add_parser("state", help="low-level recovery update for compact workflow state")
     state_parser.add_argument("--target", default=".")
     state_parser.add_argument("--phase")
     state_parser.add_argument("--workflow", choices=sorted(VALID_WORKFLOWS))
