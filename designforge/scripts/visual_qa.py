@@ -84,6 +84,30 @@ def safe_evidence_path(target: Path, token: str) -> Path | None:
     return absolute
 
 
+def has_declared_render_signature(path: Path) -> bool:
+    """Perform a bounded magic-byte sanity check without decoding the media."""
+    try:
+        with path.open("rb") as stream:
+            header = stream.read(16)
+    except OSError:
+        return False
+
+    suffix = path.suffix.lower()
+    if suffix == ".png":
+        return header.startswith(b"\x89PNG\r\n\x1a\n")
+    if suffix in {".jpg", ".jpeg"}:
+        return header.startswith(b"\xff\xd8\xff")
+    if suffix == ".gif":
+        return header.startswith((b"GIF87a", b"GIF89a"))
+    if suffix == ".webp":
+        return len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP"
+    if suffix == ".mp4":
+        return len(header) >= 8 and header[4:8] == b"ftyp"
+    if suffix == ".webm":
+        return header.startswith(b"\x1a\x45\xdf\xa3")
+    return False
+
+
 def validate_review(target: Path, phase: str | None = None) -> list[str]:
     target = target.resolve()
     path = review_path(target, phase)
@@ -144,8 +168,12 @@ def validate_review(target: Path, phase: str | None = None) -> list[str]:
         try:
             if evidence_path.stat().st_size == 0:
                 errors.append(f"checked capture evidence file is empty: {evidence}")
+                continue
         except OSError:
             errors.append(f"checked capture evidence file cannot be inspected: {evidence}")
+            continue
+        if not has_declared_render_signature(evidence_path):
+            errors.append(f"checked capture evidence has invalid render signature: {evidence}")
 
     if status in {"pass", "pass-with-notes", "fail"} and checked_count == 0:
         errors.append(f"Verdict status '{status}' requires at least one inspected render artifact")
