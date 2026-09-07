@@ -104,6 +104,36 @@ Include:
 
 Create for existing products when mapping is useful.
 
+### Mapping provenance contract
+
+Interpreted mapping artifacts must distinguish repository facts from agent interpretation. The canonical templates under `designforge/assets/codebase/` use the same minimal structure:
+
+- `## Scope`
+- `## Verified findings`
+- `## Inferences`
+- `## Unknowns`
+- `## Evidence index`
+
+Rules:
+
+- Put source-confirmed facts under `Verified findings`.
+- Put architectural, UX, design-system, or migration interpretations under `Inferences` until they are confirmed.
+- Put material gaps that affect confidence under `Unknowns` rather than silently filling them from general knowledge.
+- Every substantive verified finding must be traceable to at least one repository-relative source, test, or rendered artifact in `Evidence index`.
+- Prefer stable repository paths plus a symbol, selector, route, token, section, test, or short statement of what the source proves.
+- Line numbers may be included when useful but should not be the only provenance because they become stale quickly.
+- Generated `EVIDENCE.md` is a navigation aid, not an interpreted mapping artifact. Scanner signals must be verified against relevant source before being promoted to verified findings.
+- Do not promote an inference to verified merely because it appears plausible or because a package/file name suggests it.
+- Revalidate important findings after material codebase changes. Repository reality overrides stale mapping documents.
+
+The read-only validator can check structural provenance requirements:
+
+```bash
+python designforge/scripts/validate_mapping_artifacts.py /path/to/project
+```
+
+It validates artifact structure and evidence presence for explicit verified list items. It does not attempt to judge whether an agent's interpretation is semantically correct.
+
 ### STACK.md
 
 Capture framework, styling system, UI libraries, routing, state management, animation libraries, icon system, fonts, and relevant build/test tooling.
