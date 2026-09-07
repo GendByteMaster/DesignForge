@@ -68,6 +68,49 @@ class DesignForgeCliTests(unittest.TestCase):
             self.assertIn("## Redesign mode\n\nconservative", project)
             self.assertNotEqual(project, "custom")
 
+    def test_scan_requires_initialized_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = run_cli("scan", tmp)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("run init first", result.stderr)
+
+    def test_scan_collects_package_and_style_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "sample-web-app"
+            shutil.copytree(FIXTURE, target)
+            self.assertEqual(run_cli("init", str(target), "--mode", "refactor").returncode, 0)
+
+            result = run_cli("scan", str(target))
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            evidence_path = target / ".DesignForge" / "codebase" / "EVIDENCE.md"
+            self.assertTrue(evidence_path.exists())
+            evidence = evidence_path.read_text(encoding="utf-8")
+            self.assertIn("Node.js package manifest", evidence)
+            self.assertIn("React", evidence)
+            self.assertIn("`package.json`", evidence)
+            self.assertIn("`.tsx`: 1", evidence)
+            self.assertIn("`.css`: 1", evidence)
+            self.assertIn("hex color literals: **2**", evidence)
+            self.assertIn("CSS custom property definitions: **2**", evidence)
+            self.assertIn("CSS custom property uses: **2**", evidence)
+            self.assertIn("border-radius declarations: **1**", evidence)
+            self.assertIn("box-shadow declarations: **1**", evidence)
+            self.assertIn("evidence only", evidence)
+
+    def test_scan_refreshes_generated_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "sample-web-app"
+            shutil.copytree(FIXTURE, target)
+            self.assertEqual(run_cli("init", str(target), "--mode", "refactor").returncode, 0)
+            self.assertEqual(run_cli("scan", str(target)).returncode, 0)
+
+            evidence_path = target / ".DesignForge" / "codebase" / "EVIDENCE.md"
+            evidence_path.write_text("stale generated evidence", encoding="utf-8")
+            refreshed = run_cli("scan", str(target))
+            self.assertEqual(refreshed.returncode, 0, refreshed.stderr)
+            self.assertNotEqual(evidence_path.read_text(encoding="utf-8"), "stale generated evidence")
+
     def test_phase_creates_numbered_artifacts_and_updates_state(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)
@@ -193,6 +236,7 @@ class DesignForgeCliTests(unittest.TestCase):
             steps = (
                 ("init", str(target), "--mode", "reimagine"),
                 ("transition", "map", "--target", str(target)),
+                ("scan", str(target)),
                 ("transition", "direct", "--target", str(target)),
                 ("transition", "systemize", "--target", str(target)),
                 ("phase", "Main Workspace", "--target", str(target)),
@@ -211,6 +255,7 @@ class DesignForgeCliTests(unittest.TestCase):
             self.assertIn("Current workflow: guard", state)
             self.assertIn("Mode: reimagine", state)
             self.assertIn("Status: complete", state)
+            self.assertTrue((target / ".DesignForge" / "codebase" / "EVIDENCE.md").exists())
 
 
 if __name__ == "__main__":
