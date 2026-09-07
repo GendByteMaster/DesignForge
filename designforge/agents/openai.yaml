@@ -1,0 +1,4 @@
+interface:
+  display_name: "DesignForge"
+  short_description: "Create original UI systems and persistent redesign workflows"
+  default_prompt: "Use $designforge to analyze this software product, establish an original design direction, build a coherent design system, implement the UI, and verify the rendered result through the persistent .DesignForge workflow."
