@@ -159,13 +159,14 @@ def safe_repo_path(target: Path, token: str) -> str | None:
     return candidate.as_posix()
 
 
-def evidence_paths(target: Path) -> set[str]:
+def mapping_artifact_paths(target: Path) -> list[Path]:
     codebase = target / ".DesignForge" / "codebase"
+    return [codebase / name for name in ARTIFACT_NAMES if (codebase / name).is_file()]
+
+
+def evidence_paths(target: Path) -> set[str]:
     paths: set[str] = set()
-    for name in ARTIFACT_NAMES:
-        artifact = codebase / name
-        if not artifact.is_file():
-            continue
+    for artifact in mapping_artifact_paths(target):
         text = artifact.read_text(encoding="utf-8")
         evidence = section(text, "## Evidence index")
         for token in PATH_TOKEN_RE.findall(evidence):
@@ -175,7 +176,19 @@ def evidence_paths(target: Path) -> set[str]:
     return paths
 
 
-def render_state(commit: str | None, dirty: set[str] | None, digests: dict[str, str]) -> str:
+def mapping_digests(target: Path) -> dict[str, str]:
+    return {
+        artifact.relative_to(target).as_posix(): sha256_file(artifact)
+        for artifact in mapping_artifact_paths(target)
+    }
+
+
+def render_state(
+    commit: str | None,
+    dirty: set[str] | None,
+    source_digests: dict[str, str],
+    artifact_digests: dict[str, str],
+) -> str:
     dirty_values = sorted(dirty or set())
     lines = [
         "# Mapping Freshness State",
@@ -187,31 +200,35 @@ def render_state(commit: str | None, dirty: set[str] | None, digests: dict[str, 
         "- Schema: `1`",
         f"- Git commit: `{commit or 'unavailable'}`",
         f"- Relevant working-tree paths: `{len(dirty_values)}`",
-        f"- Referenced source paths: `{len(digests)}`",
+        f"- Referenced source paths: `{len(source_digests)}`",
+        f"- Interpreted mapping artifacts: `{len(artifact_digests)}`",
         "",
         "## Relevant working-tree paths",
         "",
     ]
     lines.extend(f"- `{path}`" for path in dirty_values) if dirty_values else lines.append("- None.")
     lines.extend(["", "## Source digests", ""])
-    lines.extend(f"- `{path}`: `{digest}`" for path, digest in sorted(digests.items()))
+    lines.extend(f"- `{path}`: `{digest}`" for path, digest in sorted(source_digests.items()))
+    lines.extend(["", "## Mapping artifact digests", ""])
+    lines.extend(f"- `{path}`: `{digest}`" for path, digest in sorted(artifact_digests.items()))
     lines.extend(
         [
             "",
             "## Freshness contract",
             "",
-            "A map is stale when a referenced source changes or disappears, when UI-relevant working-tree paths differ from this baseline, or when UI-relevant committed files changed since the mapped Git commit. Non-UI Git drift may be reported without invalidating the map.",
+            "A map is stale when an interpreted mapping artifact changes after this stamp, a referenced source changes or disappears, UI-relevant working-tree paths differ from this baseline, or UI-relevant committed files changed since the mapped Git commit. Non-UI Git drift does not invalidate the map.",
             "",
         ]
     )
     return "\n".join(lines)
 
 
-def parse_state(path: Path) -> tuple[str | None, set[str], dict[str, str]]:
+def parse_state(path: Path) -> tuple[str | None, set[str], dict[str, str], dict[str, str]]:
     text = path.read_text(encoding="utf-8")
     commit: str | None = None
     dirty: set[str] = set()
-    digests: dict[str, str] = {}
+    source_digests: dict[str, str] = {}
+    artifact_digests: dict[str, str] = {}
     current = ""
     for line in text.splitlines():
         if line.startswith("## "):
@@ -229,8 +246,12 @@ def parse_state(path: Path) -> tuple[str | None, set[str], dict[str, str]]:
         elif current == "## Source digests":
             match = DIGEST_LINE_RE.match(line)
             if match:
-                digests[match.group(1)] = match.group(2)
-    return commit, dirty, digests
+                source_digests[match.group(1)] = match.group(2)
+        elif current == "## Mapping artifact digests":
+            match = DIGEST_LINE_RE.match(line)
+            if match:
+                artifact_digests[match.group(1)] = match.group(2)
+    return commit, dirty, source_digests, artifact_digests
 
 
 def stamp(target: Path) -> list[str]:
@@ -245,13 +266,22 @@ def stamp(target: Path) -> list[str]:
     dirty = git_worktree_paths(target)
     relevant_dirty = {path for path in (dirty or set()) if is_ui_relevant(path)}
     sources = referenced | relevant_dirty
-    digests = {path: sha256_file(target / path) for path in sorted(sources)}
-    missing = sorted(path for path in referenced if digests[path] == "missing")
+    source_digests = {path: sha256_file(target / path) for path in sorted(sources)}
+    missing = sorted(path for path in referenced if source_digests[path] == "missing")
     if missing:
         return ["referenced evidence path is missing: " + path for path in missing]
 
+    artifact_digests = mapping_digests(target)
     destination = target / ".DesignForge" / "codebase" / MAP_STATE_NAME
-    destination.write_text(render_state(git_commit(target), relevant_dirty if dirty is not None else None, digests), encoding="utf-8")
+    destination.write_text(
+        render_state(
+            git_commit(target),
+            relevant_dirty if dirty is not None else None,
+            source_digests,
+            artifact_digests,
+        ),
+        encoding="utf-8",
+    )
     return []
 
 
@@ -261,16 +291,20 @@ def check(target: Path) -> list[str]:
     if not state_path.is_file():
         return [".DesignForge/codebase/MAP_STATE.md not found; stamp mapping freshness after map"]
     try:
-        baseline_commit, baseline_dirty, digests = parse_state(state_path)
+        baseline_commit, baseline_dirty, source_digests, artifact_digests = parse_state(state_path)
     except (OSError, UnicodeDecodeError):
         return ["MAP_STATE.md could not be read"]
-    if not digests:
+    if not source_digests:
         return ["MAP_STATE.md contains no source digests"]
+    if not artifact_digests:
+        return ["MAP_STATE.md contains no mapping artifact digests"]
 
     stale: list[str] = []
-    for path, expected in sorted(digests.items()):
-        actual = sha256_file(target / path)
-        if actual != expected:
+    for path, expected in sorted(artifact_digests.items()):
+        if sha256_file(target / path) != expected:
+            stale.append(f"mapping artifact changed after stamp: {path}")
+    for path, expected in sorted(source_digests.items()):
+        if sha256_file(target / path) != expected:
             stale.append(f"source changed: {path}")
 
     current_dirty = git_worktree_paths(target)
