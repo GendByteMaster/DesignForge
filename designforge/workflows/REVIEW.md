@@ -66,9 +66,30 @@ Evaluate only dimensions relevant to the surface:
    python designforge/scripts/designforge.py visual init /path/to/project
    ```
 
-6. Reuse existing persistent render evidence only when it still represents the implementation being reviewed. Otherwise create new captures with whatever browser, emulator, simulator, preview, screenshot, native-app, or equivalent tooling the current runtime provides.
-7. Add one capture-matrix row per material rendered state. Record the actual surface, state, viewport/form factor, and project-relative evidence path.
-8. Inspect the exact referenced artifact before marking its row checked. A checked row is a claim that this rendered output was actually reviewed.
+6. Reuse existing persistent render evidence only when it still represents the implementation being reviewed. Otherwise create a fresh screenshot/video with whatever browser, emulator, simulator, preview, screenshot, native-app, or equivalent tooling the current runtime provides.
+7. Inspect the exact render before registering it as checked evidence. A checked row is a claim that this output was actually reviewed.
+8. After inspection, import the render and register it through the public DesignForge capture handoff.
+
+   Phase-scoped:
+
+   ```bash
+   python designforge/scripts/designforge.py visual capture /tmp/render.png /path/to/project \
+     --surface "Main Workspace" \
+     --state "default" \
+     --viewport "1440x900" \
+     --phase <phase>
+   ```
+
+   Product-wide:
+
+   ```bash
+   python designforge/scripts/designforge.py visual capture /tmp/render.png /path/to/project \
+     --surface "Application Shell" \
+     --state "default" \
+     --viewport "1440x900"
+   ```
+
+   The handoff validates media type/signature, copies external evidence into the correct managed `visual-evidence/` directory without overwriting existing captures, and creates the checked capture-matrix row. Do not call it for an artifact that has not actually been inspected.
 9. Record visual and accessibility observations in `VISUAL_QA.md`. Record actionable defects in `REVIEW.md` with evidence and impact.
 10. Classify defect severity:
     - `blocker` — prevents correct use, accessibility, or intended workflow;
@@ -77,13 +98,29 @@ Evaluate only dimensions relevant to the surface:
     - `note` — observation or future improvement.
 11. Prefer concrete statements such as "Toolbar action spacing uses three unrelated values" over vague judgments such as "looks inconsistent".
 12. Recommend the smallest effective fix.
-13. Set the Visual QA verdict accurately:
-    - `pass` — inspected required states have no material visual defect;
-    - `pass-with-notes` — inspected states are acceptable with documented non-blocking observations;
-    - `fail` — inspected evidence shows unresolved material defects;
-    - `blocked` — visual review is expected but blocked by an environment/product condition;
-    - `unavailable` — suitable rendered evidence cannot be produced or accessed in the current runtime;
-    - `pending` — review has not been completed.
+13. Set the Visual QA verdict through the public CLI:
+
+   Phase-scoped:
+
+   ```bash
+   python designforge/scripts/designforge.py visual verdict pass /path/to/project --phase <phase>
+   ```
+
+   Product-wide:
+
+   ```bash
+   python designforge/scripts/designforge.py visual verdict pass /path/to/project
+   ```
+
+   Valid verdicts are:
+   - `pass` — inspected required states have no material visual defect;
+   - `pass-with-notes` — inspected states are acceptable with documented non-blocking observations;
+   - `fail` — inspected evidence shows unresolved material defects;
+   - `blocked` — visual review is expected but blocked by an environment/product condition;
+   - `unavailable` — suitable rendered evidence cannot be produced or accessed in the current runtime;
+   - `pending` — review has not been completed.
+
+   `visual verdict` validates the updated contract and rolls the status change back when a conclusive verdict is not supported by inspected evidence.
 14. Validate the mechanical evidence contract:
 
    Phase-scoped:
@@ -98,13 +135,15 @@ Evaluate only dimensions relevant to the surface:
    python designforge/scripts/designforge.py visual validate /path/to/project
    ```
 
-15. If validation fails, fix the evidence contract or verdict rather than weakening the validator. Mechanical validation confirms artifact existence and traceability; it does not judge visual quality.
+15. If validation fails, fix the evidence contract or verdict rather than weakening the validator. Mechanical validation confirms managed artifact existence, signatures, and traceability; it does not judge visual quality.
 16. Do not rewrite unrelated code as part of review.
 17. Update `STATE.md` if blockers or required follow-up change the next workflow.
 
 ## Visual evidence rules
 
 - Do not claim visual review if no rendered output was inspected.
+- Use `designforge visual capture` as the canonical renderer-to-DesignForge evidence handoff.
+- Run `visual capture` only after inspecting the exact supplied artifact because registration creates a checked row.
 - `pass`, `pass-with-notes`, and `fail` require at least one checked capture backed by an existing non-empty supported render artifact.
 - `pending`, `blocked`, and `unavailable` must not imply rendered inspection occurred.
 - Prefer persistent project-relative render evidence over chat-only screenshots when the runtime can save artifacts safely.
@@ -118,7 +157,7 @@ Evaluate only dimensions relevant to the surface:
 - Design preference alone is not a defect unless it conflicts with product intent or the active system.
 - Preserve intentional platform conventions.
 - Avoid duplicate findings across phase and product-wide review artifacts.
-- Never manufacture an evidence path or mark an uninspected capture as checked.
+- Never manufacture an evidence path or register an uninspected capture.
 - If rendering is unavailable, use an honest `blocked`, `unavailable`, or `pending` verdict and state what could not be verified.
 
 ## Completion
@@ -126,7 +165,7 @@ Evaluate only dimensions relevant to the surface:
 Review is complete when:
 
 - findings are prioritized, evidence-based, actionable, and clear enough that a build workflow can resolve them without reinterpreting the entire design direction;
-- any claimed rendered inspection is represented by checked persistent evidence;
+- any claimed rendered inspection is represented by checked persistent evidence imported through the managed Visual QA contract;
 - the Visual QA verdict matches what was actually inspected;
 - visual QA mechanical validation passes when a `VISUAL_QA.md` artifact is used;
 - unavailable or blocked visual states are explicitly recorded rather than silently assumed correct.
