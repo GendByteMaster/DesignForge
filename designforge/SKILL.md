@@ -1,10 +1,6 @@
 ---
 name: designforge
 description: "Design and redesign software product interfaces using a persistent, file-backed workflow. Use for greenfield UI creation, visual/UX redesigns, design-system generation, UI architecture, design tokens, component systems, responsive behavior, accessibility, motion, visual QA, and design-drift review in software projects."
-compatibility: "Agent Skills-compatible coding agents with repository read/write access. Visual inspection features require screenshot or browser/render tooling when available."
-metadata:
-  author: GendByteMaster
-  version: "0.1.0-dev"
 ---
 
 # DesignForge
@@ -158,6 +154,7 @@ Use the smallest workflow that satisfies the task:
 - understand an existing UI codebase -> `map`;
 - capture decisions and constraints -> `discuss`;
 - create/refine visual direction -> `direct`;
+- create design-system contracts -> `systemize`;
 - create roadmap or phase plan -> `plan`;
 - implement the active phase -> `build`;
 - inspect existing work without unrelated implementation -> `review`;
