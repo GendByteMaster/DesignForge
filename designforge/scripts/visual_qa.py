@@ -148,6 +148,9 @@ def validate_review(target: Path, phase: str | None = None) -> list[str]:
         return errors
 
     checked_count = 0
+    managed_evidence_root = evidence_dir(target, phase).resolve()
+    managed_evidence_label = managed_evidence_root.relative_to(target).as_posix()
+
     for checked, surface, state, viewport, evidence in captures:
         if not checked:
             continue
@@ -158,6 +161,13 @@ def validate_review(target: Path, phase: str | None = None) -> list[str]:
         evidence_path = safe_evidence_path(target, evidence)
         if evidence_path is None:
             errors.append(f"checked capture evidence must be project-relative: {evidence}")
+            continue
+        try:
+            evidence_path.relative_to(managed_evidence_root)
+        except ValueError:
+            errors.append(
+                f"checked capture evidence must live under {managed_evidence_label}: {evidence}"
+            )
             continue
         if evidence_path.suffix.lower() not in EVIDENCE_SUFFIXES:
             errors.append(f"checked capture evidence has unsupported render format: {evidence}")
