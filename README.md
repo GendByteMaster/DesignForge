@@ -225,17 +225,20 @@ The scanner refreshes:
 
 It currently records bounded, observable signals such as:
 
-- root project manifests;
-- known frontend framework/package families from `package.json`;
+- root and bounded nested project manifests;
+- known frontend framework/package families aggregated from discovered `package.json` files;
 - UI library, styling, motion, icon, and state-management package signals;
+- application entry/shell candidates such as `App.tsx`, `main.tsx`, `main.dart`, and similar conventional entry files;
 - relevant source/style extension counts;
 - likely component, screen/route, style/theme/token paths;
 - common frontend configuration files;
 - simple CSS counts for color literals, custom properties, radii, shadows, and `!important`.
 
-The scanner excludes common dependency/generated directories such as `.git`, `.DesignForge`, `node_modules`, `.next`, `dist`, `build`, `coverage`, `target`, and vendor environments. It also applies file-count and file-size limits so repository inspection remains bounded.
+Manifest discovery reuses the same bounded repository inventory as the rest of the scanner. Known manifests are considered at the repository root and up to three directories below it, which supports common multi-stack layouts such as `desktop/package.json` and `apps/web/package.json` without starting a separate unbounded recursive search. Malformed nested package manifests are reported with their repository-relative path.
 
-`EVIDENCE.md` is intentionally **not** a design audit. A package being installed does not prove it is actively used; a color literal does not automatically mean design-system drift; a route-like filename does not prove a screen is user-facing. The `map` workflow must verify relevant source files before creating durable findings in `STACK.md`, `UI_ARCHITECTURE.md`, `COMPONENTS.md`, `STYLES.md`, `SCREENS.md`, or `CONCERNS.md`.
+The scanner excludes common dependency/generated directories such as `.git`, `.DesignForge`, `node_modules`, `.next`, `dist`, `build`, `coverage`, `target`, and vendor environments. It also applies file-count, manifest-count, manifest-depth, and file-size limits so repository inspection remains bounded.
+
+`EVIDENCE.md` is intentionally **not** a design audit. A package being installed does not prove it is actively used; a color literal does not automatically mean design-system drift; an entry candidate does not prove it is the active application shell; and a package found in one nested app does not automatically describe every UI surface in a multi-stack repository. The `map` workflow must verify relevant source files before creating durable findings in `STACK.md`, `UI_ARCHITECTURE.md`, `COMPONENTS.md`, `STYLES.md`, `SCREENS.md`, or `CONCERNS.md`.
 
 ### Create a phase
 
@@ -364,7 +367,8 @@ The test suite includes:
 - persistent workspace initialization and idempotency;
 - workflow state transitions and forced recovery;
 - phase scaffolding;
-- deterministic UI/codebase evidence scanning;
+- deterministic UI/codebase evidence scanning, including bounded nested manifests and entry/shell candidates;
+- generated/dependency directory exclusion and nested-manifest depth limits;
 - Codex and Claude project-local skill installation;
 - installation conflict/force behavior;
 - an end-to-end lifecycle against a representative React/Vite-style project fixture.
@@ -386,6 +390,6 @@ init
 
 ## Current development focus
 
-The v0.1 foundation now includes persistent artifacts, idempotent initialization, phase scaffolding, deterministic workflow transitions, structural validation, deterministic UI/codebase evidence collection, canonical skill-package validation, project-local Codex/Claude installation, CI, and an end-to-end lifecycle test.
+The v0.1 foundation now includes persistent artifacts, idempotent initialization, phase scaffolding, deterministic workflow transitions, structural validation, bounded multi-stack UI/codebase evidence collection, canonical skill-package validation, project-local Codex/Claude installation, CI, and an end-to-end lifecycle test.
 
-The next major proof point is the first real DesignForge run against an external software project with rendered visual QA. The scanner should remain an evidence collector rather than evolve into an unreliable heuristic design judge.
+The next major proof point is trustworthy interpreted mapping: turning scanner evidence plus verified source inspection into durable `STACK.md`, `UI_ARCHITECTURE.md`, `COMPONENTS.md`, `STYLES.md`, `SCREENS.md`, and `CONCERNS.md` artifacts with clear provenance. Rendered visual QA should follow once those mapping contracts are reliable. The scanner itself should remain an evidence collector rather than evolve into an unreliable heuristic design judge.
