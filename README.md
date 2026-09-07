@@ -48,6 +48,7 @@ designforge/
 │   ├── evidence_scanner.py
 │   ├── installer.py
 │   ├── install_skill.py
+│   ├── mapping_freshness.py
 │   ├── state_machine.py
 │   ├── validate_mapping_artifacts.py
 │   └── validate_skill_package.py
@@ -144,6 +145,7 @@ The lifecycle is resumable. A workflow may skip stages that are already complete
 - **Guard against design drift** — recent changes should be checked against the active design system and Design DNA.
 - **Evidence before conclusions** — deterministic scanners may collect repository signals, but agents must verify relevant source before turning signals into design findings.
 - **Provenance before persistence** — durable mapping separates verified facts, inferences, unknowns, and the repository evidence supporting verified findings.
+- **Freshness before reuse** — a structurally valid map is not assumed current forever; DesignForge can detect when its cited sources, mapping artifacts, or relevant UI code changed.
 
 ## Runtime workspace
 
@@ -158,6 +160,7 @@ A target project may progressively create a workspace such as:
 ├── DESIGN_SYSTEM.md
 ├── codebase/
 │   ├── EVIDENCE.md
+│   ├── MAP_STATE.md
 │   ├── STACK.md
 │   ├── UI_ARCHITECTURE.md
 │   ├── COMPONENTS.md
@@ -181,10 +184,11 @@ Not every file or directory should be created immediately. DesignForge creates a
 - `DESIGN_SYSTEM.md` — high-level design-system contract.
 - `codebase/EVIDENCE.md` — refreshable scanner output containing observable repository signals, not durable design conclusions.
 - interpreted `codebase/*.md` maps — durable source-verified codebase understanding with explicit provenance and uncertainty boundaries.
+- `codebase/MAP_STATE.md` — generated freshness baseline for interpreted mapping; contains mechanical hashes/Git state, not design decisions.
 
 ## Operational toolkit
 
-DesignForge includes a dependency-free Python CLI for deterministic workspace operations. The agent workflows remain the design intelligence layer; the CLI handles mechanical state and evidence collection that should not depend on prompt behavior.
+DesignForge includes a dependency-free Python CLI for deterministic workspace operations. The agent workflows remain the design intelligence layer; the CLI handles mechanical state, evidence collection, provenance support, and mapping freshness checks that should not depend on prompt behavior.
 
 Requirements: Python 3.11+.
 
@@ -278,6 +282,41 @@ python designforge/scripts/validate_mapping_artifacts.py /path/to/project
 
 The validator is deliberately read-only. It checks the document contract and requires path-like provenance when substantive verified findings exist. It does **not** decide whether a cited source actually proves a finding, so source inspection remains the agent's responsibility.
 
+### Stamp and check mapping freshness
+
+After interpreted mapping has been source-checked and provenance validation passes, create a freshness baseline:
+
+```bash
+python designforge/scripts/designforge.py mapping stamp /path/to/project
+```
+
+This creates:
+
+```text
+.DesignForge/codebase/MAP_STATE.md
+```
+
+The baseline records SHA-256 digests for cited source files and interpreted mapping artifacts. When Git is available, it also records the mapped commit and UI-relevant working-tree state.
+
+Before a later workflow reuses the saved map as current truth, check it:
+
+```bash
+python designforge/scripts/designforge.py mapping check /path/to/project
+```
+
+A map is reported stale when, for example:
+
+- a cited source changed or disappeared;
+- an interpreted mapping artifact changed after the stamp;
+- UI-relevant working-tree changes diverged from the baseline;
+- UI-relevant committed files changed after the mapped commit.
+
+A Git commit changing by itself is not enough to invalidate the map. Documentation-only commits such as README changes do not make mapping stale unless mapped/UI-relevant evidence also changed.
+
+Freshness still works without Git through content digests. Older workspaces that have interpreted mapping but no `MAP_STATE.md` should be treated as freshness-unknown; inspect, validate, and stamp them before relying on those maps.
+
+If a freshness check fails, do not simply stamp again. Reinspect the reported changes, refresh the affected mapping findings, rerun provenance validation, and only then create a new baseline.
+
 ### Create a phase
 
 ```bash
@@ -352,6 +391,12 @@ Validate interpreted mapping provenance in a target project:
 python designforge/scripts/validate_mapping_artifacts.py /path/to/project
 ```
 
+Check whether an already-stamped interpreted map is still current:
+
+```bash
+python designforge/scripts/designforge.py mapping check /path/to/project
+```
+
 Validate runtime structure plus a target project's persistent workspace:
 
 ```bash
@@ -364,10 +409,13 @@ Validation covers:
 - required `agents/openai.yaml` interface metadata;
 - required workflow, asset, reference, and script resources;
 - required provenance-aware mapping templates and their common sections;
+- presence of the mapping provenance validator and freshness checker in the portable skill package;
 - mapping evidence presence for substantive verified findings;
 - valid mode/workflow/status values;
 - agreement between `PROJECT.md` and `STATE.md` redesign modes;
 - existence of an active phase directory when one is referenced.
+
+Mapping freshness remains an explicit check rather than a global workspace-validation failure because UI implementation work can intentionally make a previously valid map stale.
 
 ## Redesign modes
 
@@ -380,14 +428,14 @@ DesignForge supports three freedom levels:
 ## Workflow playbooks
 
 - `init` — initialize `.DesignForge/` and establish persistent project state.
-- `map` — collect evidence, inspect, and produce provenance-aware interpreted UI/codebase maps.
+- `map` — collect evidence, inspect source, produce provenance-aware interpreted maps, and stamp a freshness baseline.
 - `discuss` — persist design decisions, constraints, preferences, and rejected directions.
 - `direct` — create or refine the product-specific visual/UX direction.
 - `systemize` — translate the direction into design-system contracts.
 - `plan` — build a bounded, visually verifiable roadmap and phase plan.
 - `build` — implement the active phase and perform technical + visual validation.
 - `review` — perform evidence-based visual, UX, accessibility, and system review.
-- `continue` — resume from persistent state with minimal rediscovery.
+- `continue` — resume from persistent state with minimal rediscovery and verify required mapping freshness before reuse.
 - `guard` — detect design-system drift in recent or proposed UI changes.
 
 ## Development verification
@@ -404,6 +452,7 @@ python -m py_compile designforge/scripts/installer.py
 python -m py_compile designforge/scripts/install_skill.py
 python -m py_compile designforge/scripts/validate_skill_package.py
 python -m py_compile designforge/scripts/validate_mapping_artifacts.py
+python -m py_compile designforge/scripts/mapping_freshness.py
 python designforge/scripts/designforge.py validate
 python designforge/scripts/validate_skill_package.py
 python -m unittest discover -s tests -v
@@ -418,11 +467,17 @@ The test suite includes:
 - generated/dependency directory exclusion and nested-manifest depth limits;
 - provenance-aware mapping artifact validation;
 - verified-finding evidence requirements and uncertainty-section contracts;
+- mapping freshness stamp/check behavior;
+- public `designforge mapping stamp|check` CLI coverage;
+- cited source and interpreted mapping artifact digest invalidation;
+- UI-relevant committed/worktree freshness detection;
+- non-UI Git drift false-positive protection;
+- non-Git digest-based freshness behavior;
 - Codex and Claude project-local skill installation;
 - installation conflict/force behavior;
 - an end-to-end lifecycle against a representative React/Vite-style project fixture.
 
-End-to-end lifecycle:
+End-to-end mapping lifecycle:
 
 ```text
 init
@@ -430,7 +485,15 @@ init
   -> scan evidence
   -> verify source
   -> validate mapping provenance
+  -> stamp mapping freshness
+  -> check mapping freshness
   -> direct
+```
+
+Main design lifecycle then continues through:
+
+```text
+direct
   -> systemize
   -> phase/plan
   -> build
@@ -441,6 +504,6 @@ init
 
 ## Current development focus
 
-The v0.1 foundation now includes persistent artifacts, idempotent initialization, phase scaffolding, deterministic workflow transitions, structural validation, bounded multi-stack UI/codebase evidence collection, provenance-aware interpreted mapping contracts, canonical skill-package validation, project-local Codex/Claude installation, CI, and an end-to-end lifecycle test.
+The v0.1 foundation now includes persistent artifacts, idempotent initialization, phase scaffolding, deterministic workflow transitions, structural validation, bounded multi-stack UI/codebase evidence collection, provenance-aware interpreted mapping, mapping freshness baselines and stale-map detection, canonical skill-package validation, project-local Codex/Claude installation, CI, and an end-to-end lifecycle test.
 
-The next major proof point is **mapping freshness and visual verification**: DesignForge should recognize when durable codebase maps may be stale after material repository changes, and later connect implementation/review workflows to rendered visual evidence where the runtime provides browser, screenshot, or native-app inspection tooling. The deterministic scanner should remain an evidence collector rather than evolve into an unreliable heuristic design judge.
+The next major proof point is **rendered visual QA**: DesignForge should connect `build` and `review` workflows to real rendered evidence when the runtime provides browser, screenshot, emulator, simulator, or native-app inspection tooling. That layer should verify hierarchy, spacing, responsive behavior, clipping/overflow, interaction states, focus visibility, and design-system drift without making DesignForge depend on any single rendering provider.
