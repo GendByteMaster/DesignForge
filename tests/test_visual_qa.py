@@ -174,6 +174,19 @@ class VisualQATests(unittest.TestCase):
                 result = self.validate_visual(target)
                 self.assertEqual(result.returncode, 0, f"{filename}: {result.stderr}")
 
+    def test_checked_capture_rejects_evidence_outside_managed_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.init_target(target)
+            self.assertEqual(self.init_visual(target).returncode, 0)
+            evidence = target / "dashboard.png"
+            evidence.write_bytes(b"\x89PNG\r\n\x1a\nrender-evidence")
+            self.mark_capture(target, "dashboard.png")
+
+            result = self.validate_visual(target)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("must live under .DesignForge/reviews/visual-evidence", result.stderr)
+
     def test_checked_capture_rejects_path_traversal(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)
