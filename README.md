@@ -33,6 +33,8 @@ designforge/
 ├── references/
 │   ├── WORKFLOW.md
 │   └── ARTIFACTS.md
+├── scripts/
+│   └── designforge.py
 └── workflows/
     ├── INIT.md
     ├── MAP.md
@@ -113,6 +115,94 @@ Not every file or directory should be created immediately. DesignForge creates a
 - `DESIGN.md` — canonical design thesis and Design DNA.
 - `DESIGN_SYSTEM.md` — high-level design-system contract.
 
+## Operational toolkit
+
+DesignForge includes a dependency-free Python CLI for deterministic workspace operations. The agent workflows remain the design intelligence layer; the CLI handles mechanical state that should not depend on prompt behavior.
+
+Requirements: Python 3.11+.
+
+### Initialize a project
+
+```bash
+python designforge/scripts/designforge.py init /path/to/project --mode refactor
+```
+
+`init` creates only the minimum persistent workspace:
+
+```text
+.DesignForge/
+├── PROJECT.md
+└── STATE.md
+```
+
+It is idempotent by default. Existing root artifacts are preserved. Use `--force` only when intentionally resetting DesignForge-managed root templates.
+
+### Create a phase
+
+```bash
+python designforge/scripts/designforge.py phase "Main Workspace" --target /path/to/project
+```
+
+This creates a numbered phase such as:
+
+```text
+.DesignForge/phases/01-main-workspace/
+├── CONTEXT.md
+├── RESEARCH.md
+├── PLAN.md
+├── DESIGN.md
+├── IMPLEMENTATION.md
+├── REVIEW.md
+└── RESULT.md
+```
+
+and moves `STATE.md` to the new phase planning state.
+
+### Update workflow state
+
+```bash
+python designforge/scripts/designforge.py state \
+  --target /path/to/project \
+  --workflow build \
+  --status in-progress \
+  --phase 01-main-workspace
+```
+
+Supported redesign modes:
+
+- `conservative`
+- `refactor`
+- `reimagine`
+
+Supported workflows:
+
+- `init`
+- `map`
+- `discuss`
+- `direct`
+- `systemize`
+- `plan`
+- `build`
+- `review`
+- `continue`
+- `guard`
+
+### Validate
+
+Validate the DesignForge skill package:
+
+```bash
+python designforge/scripts/designforge.py validate
+```
+
+Validate the skill package and a target project's persistent workspace:
+
+```bash
+python designforge/scripts/designforge.py validate --target /path/to/project
+```
+
+Validation currently checks the core Skill metadata, required workflow/assets, and the runtime `PROJECT.md`/`STATE.md` state contract.
+
 ## Redesign modes
 
 DesignForge supports three freedom levels:
@@ -134,6 +224,18 @@ DesignForge supports three freedom levels:
 - `continue` — resume from persistent state with minimal rediscovery.
 - `guard` — detect design-system drift in recent or proposed UI changes.
 
+## Development verification
+
+CI validates the operational layer on Python 3.11, 3.12, and 3.13.
+
+Local checks:
+
+```bash
+python -m py_compile designforge/scripts/designforge.py
+python designforge/scripts/designforge.py validate
+python -m unittest discover -s tests -v
+```
+
 ## Current development focus
 
-The current v0.1 foundation establishes the workflow contracts and persistent artifact model. The next engineering layer should make the workflow operational through bootstrap/state tooling, validation, and CI rather than expanding the Markdown surface indefinitely.
+The v0.1 foundation now includes both the persistent Markdown workflow model and the first deterministic operational toolkit. The next layer is deeper state validation, workflow/state transition rules, installation/adoption guidance for coding agents, and an end-to-end test against a representative software project before the first PR to `master`.
