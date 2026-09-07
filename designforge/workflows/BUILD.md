@@ -4,7 +4,7 @@ Implement the active DesignForge phase and close the loop between design intent,
 
 ## Goal
 
-Produce a working implementation that follows the active design direction and design-system contracts, then verify it technically and visually when tooling allows.
+Produce a working implementation that follows the active design direction and design-system contracts, then verify it technically and visually with persistent render evidence when tooling allows.
 
 ## Reads
 
@@ -12,12 +12,15 @@ Produce a working implementation that follows the active design direction and de
 - `.DesignForge/PROJECT.md`
 - `.DesignForge/DESIGN.md`
 - active phase `CONTEXT.md`, `PLAN.md`, and `DESIGN.md` when present
+- active phase `VISUAL_QA.md` when already initialized
 - only relevant `.DesignForge/system/` artifacts
 - affected source files
 
 ## Writes
 
 - product source code
+- `.DesignForge/phases/<phase>/VISUAL_QA.md` when visual validation applies
+- `.DesignForge/phases/<phase>/visual-evidence/*` for persistent rendered evidence
 - `.DesignForge/phases/<phase>/REVIEW.md` when findings exist
 - `.DesignForge/phases/<phase>/RESULT.md`
 - `.DesignForge/STATE.md`
@@ -31,30 +34,65 @@ Produce a working implementation that follows the active design direction and de
 5. Reuse existing/native accessible primitives before creating new custom primitives.
 6. Implement the bounded phase scope.
 7. Run the relevant available checks, such as lint, type checking, unit tests, integration tests, build, or platform-specific validation.
-8. Render the affected UI when browser, emulator, simulator, preview, screenshot, or equivalent tooling is available.
-9. Inspect the rendered result for:
-   - hierarchy;
-   - spacing and alignment;
-   - typography;
-   - density;
-   - color and contrast;
-   - component states;
-   - responsive behavior;
-   - focus and keyboard behavior;
-   - obvious accessibility defects;
-   - fidelity to `DESIGN.md`.
-10. Record material defects in `REVIEW.md`.
-11. Fix material defects that are in scope.
-12. Re-render and inspect again when possible.
-13. Write `RESULT.md` with what was implemented, checks run, visual inspection status, unresolved issues, and follow-up work.
-14. Update `STATE.md` accurately.
+8. When the affected UI can be rendered or captured with available browser, emulator, simulator, preview, screenshot, native-app, or equivalent tooling, initialize phase-scoped visual QA if needed:
+
+   ```bash
+   python designforge/scripts/designforge.py visual init /path/to/project --phase <phase>
+   ```
+
+9. Render the affected states and store useful project-relative evidence under the phase `visual-evidence/` directory. Use the rendering provider already available in the runtime; DesignForge does not require Playwright or any single browser/native tool.
+10. Update the `VISUAL_QA.md` capture matrix with the actual surface, state, viewport/form factor, and evidence path. Mark a row checked only after that exact rendered artifact was inspected.
+11. Inspect rendered output for:
+    - hierarchy;
+    - spacing and alignment;
+    - typography;
+    - density;
+    - color and contrast;
+    - component states;
+    - responsive behavior;
+    - clipping and overflow;
+    - focus and keyboard behavior;
+    - obvious accessibility defects;
+    - fidelity to `DESIGN.md` and active system contracts.
+12. Record visual findings and accessibility observations in `VISUAL_QA.md`; record material implementation defects in phase `REVIEW.md` when they require follow-up work.
+13. Fix material defects that are in scope.
+14. Re-render changed states and inspect again when possible. Do not keep an old checked capture as proof of a state that has materially changed after the capture.
+15. Set the Visual QA verdict accurately:
+    - `pass` — inspected required states have no material visual defect;
+    - `pass-with-notes` — inspected states are acceptable with documented non-blocking observations;
+    - `fail` — inspected evidence shows unresolved material defects;
+    - `blocked` — visual QA is expected but a blocking environment/product condition prevents it;
+    - `unavailable` — no suitable render/capture tooling or artifact is available in the current runtime;
+    - `pending` — visual QA has not been completed yet.
+16. Validate the mechanical visual-evidence contract:
+
+   ```bash
+   python designforge/scripts/designforge.py visual validate /path/to/project --phase <phase>
+   ```
+
+   Mechanical validation confirms that claimed inspected rows reference existing non-empty render artifacts. It does not judge visual quality.
+17. If visual tooling is unavailable, still record the limitation explicitly when visual validation is material. Never manufacture an evidence path, check an uninspected row, or use `pass`/`fail` without an inspected render artifact.
+18. Write `RESULT.md` with what was implemented, technical checks run, the Visual QA verdict/artifact path, unresolved issues, and follow-up work.
+19. Update `STATE.md` accurately.
+
+## Visual evidence rules
+
+- Prefer persistent project-relative render artifacts over transient chat-only screenshots when the runtime can save them safely.
+- Capture only states that materially support verification; do not create large screenshot inventories without decision value.
+- A screenshot or video file is evidence that a state was rendered, not proof that the design is correct. Human/agent inspection and findings remain required.
+- `pass`, `pass-with-notes`, and `fail` require at least one checked capture backed by an existing non-empty supported image/video artifact.
+- `blocked`, `unavailable`, and `pending` must not imply that rendered inspection occurred.
+- Use multiple viewports/form factors when responsive or adaptive behavior is in scope.
+- Include focus, loading, empty, error, disabled, hover, pressed, selected, or other states only when they are relevant to the changed surface.
 
 ## Rules
 
 - Compilation alone is not completion for visual work.
 - Do not expand the phase into unrelated redesign work.
 - Do not introduce one-off colors, spacing, radii, or component behavior when an active system contract exists.
-- If visual tooling is unavailable, say so in `RESULT.md`; do not claim visual validation occurred.
+- If visual tooling is unavailable, say so in `VISUAL_QA.md` and `RESULT.md`; do not claim visual validation occurred.
+- Do not mark a capture checked until the referenced render artifact was actually inspected.
+- Do not reuse stale render evidence after materially changing the represented UI state.
 - Repository reality wins over stale plan text. Repair the plan/state if implementation conditions materially changed.
 
 ## Completion
@@ -63,6 +101,8 @@ A build phase is complete when:
 
 - requested scope is implemented;
 - relevant technical checks pass or failures are explicitly documented;
-- rendered UI was inspected when tooling allowed it;
-- material in-scope visual defects were addressed;
+- rendered UI was inspected with persistent evidence when tooling allowed it;
+- the Visual QA verdict accurately reflects what was and was not inspected;
+- material in-scope visual defects were addressed or explicitly remain as blockers/follow-up;
+- visual QA mechanical validation passes when a phase `VISUAL_QA.md` is used;
 - `RESULT.md` and `STATE.md` match repository reality.
