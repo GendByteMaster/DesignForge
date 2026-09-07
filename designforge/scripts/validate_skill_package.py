@@ -88,9 +88,13 @@ def validate_mapping_resources(errors: list[str]) -> None:
             if heading not in text:
                 errors.append(f"assets/codebase/{name} is missing {heading}")
 
-    validator = SKILL_ROOT / "scripts" / "validate_mapping_artifacts.py"
-    if not validator.is_file():
-        errors.append("missing mapping provenance validator: scripts/validate_mapping_artifacts.py")
+    scripts = {
+        "mapping provenance validator": "validate_mapping_artifacts.py",
+        "mapping freshness checker": "mapping_freshness.py",
+    }
+    for label, filename in scripts.items():
+        if not (SKILL_ROOT / "scripts" / filename).is_file():
+            errors.append(f"missing {label}: scripts/{filename}")
 
 
 def validate() -> list[str]:
