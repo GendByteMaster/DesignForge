@@ -93,6 +93,19 @@ class MappingFreshnessTests(unittest.TestCase):
             checked = self.check(target)
             self.assertEqual(checked.returncode, 0, checked.stderr)
 
+    def test_public_cli_exposes_mapping_stamp_and_check(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.prepare_mapping(target)
+
+            stamped = run(str(CLI), "mapping", "stamp", str(target))
+            self.assertEqual(stamped.returncode, 0, stamped.stderr)
+            self.assertIn("mapping freshness baseline stamped", stamped.stdout)
+
+            checked = run(str(CLI), "mapping", "check", str(target))
+            self.assertEqual(checked.returncode, 0, checked.stderr)
+            self.assertIn("mapping freshness check passed", checked.stdout)
+
     def test_cited_source_change_marks_mapping_stale(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)
