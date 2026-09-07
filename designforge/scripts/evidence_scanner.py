@@ -62,6 +62,26 @@ MANIFESTS = (
     "go.mod",
 )
 
+ENTRYPOINT_NAMES = {
+    "app.tsx",
+    "app.jsx",
+    "app.ts",
+    "app.js",
+    "app.vue",
+    "app.svelte",
+    "main.tsx",
+    "main.jsx",
+    "main.ts",
+    "main.js",
+    "main.dart",
+    "index.tsx",
+    "index.jsx",
+    "index.ts",
+    "index.js",
+    "index.html",
+    "contentview.swift",
+}
+
 PACKAGE_SIGNALS: dict[str, dict[str, tuple[str, ...]]] = {
     "Frameworks": {
         "Next.js": ("next",),
@@ -253,9 +273,14 @@ def candidate_paths(paths: list[str], directory_names: set[str], extensions: set
     return matches[:MAX_LIST_ITEMS]
 
 
+def entrypoint_candidates(paths: list[str]) -> list[str]:
+    return [path for path in paths if Path(path).name.lower() in ENTRYPOINT_NAMES][:MAX_LIST_ITEMS]
+
+
 def detect_structure(paths: list[str]) -> dict[str, list[str]]:
     source_like = SOURCE_EXTENSIONS | STYLE_EXTENSIONS
     return {
+        "Entry / shell candidates": entrypoint_candidates(paths),
         "Component candidates": candidate_paths(paths, {"components", "ui", "widgets"}, source_like),
         "Screen / route candidates": candidate_paths(
             paths,
