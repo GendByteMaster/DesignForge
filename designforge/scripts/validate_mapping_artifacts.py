@@ -39,8 +39,19 @@ def section(text: str, heading: str) -> str:
 
 
 def substantive(body: str) -> bool:
-    lines = [line.strip() for line in body.splitlines() if line.strip()]
-    return any(line not in PLACEHOLDERS for line in lines)
+    """Return whether a section contains an explicit non-placeholder list item.
+
+    Mapping findings use Markdown list items as the machine-checkable unit. Free
+    prose in a section may explain the contract and must not be mistaken for a
+    finding that requires provenance.
+    """
+
+    findings = [
+        line.strip()
+        for line in body.splitlines()
+        if line.strip().startswith("- ")
+    ]
+    return any(line not in PLACEHOLDERS for line in findings)
 
 
 def validate_file(path: Path) -> list[str]:
