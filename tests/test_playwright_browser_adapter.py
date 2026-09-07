@@ -38,7 +38,7 @@ class PlaywrightBrowserAdapterTests(unittest.TestCase):
 
     def write_fake_playwright(self, root: Path) -> Path:
         package = root / "playwright"
-        package.mkdir()
+        package.mkdir(parents=True)
         (package / "__init__.py").write_text("", encoding="utf-8")
         (package / "sync_api.py").write_text(
             textwrap.dedent(
