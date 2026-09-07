@@ -36,9 +36,15 @@ jobs:
           python -m py_compile designforge/scripts/designforge.py
           python -m py_compile designforge/scripts/state_machine.py
           python -m py_compile designforge/scripts/evidence_scanner.py
+          python -m py_compile designforge/scripts/installer.py
+          python -m py_compile designforge/scripts/install_skill.py
+          python -m py_compile designforge/scripts/validate_skill_package.py
 
-      - name: Validate skill package
+      - name: Validate runtime package
         run: python designforge/scripts/designforge.py validate
+
+      - name: Validate Agent Skills package
+        run: python designforge/scripts/validate_skill_package.py
 
       - name: Run tests
         run: python -m unittest discover -s tests -v
