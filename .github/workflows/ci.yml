@@ -41,6 +41,7 @@ jobs:
           python -m py_compile designforge/scripts/validate_skill_package.py
           python -m py_compile designforge/scripts/validate_mapping_artifacts.py
           python -m py_compile designforge/scripts/mapping_freshness.py
+          python -m py_compile designforge/scripts/visual_qa.py
 
       - name: Validate runtime package
         run: python designforge/scripts/designforge.py validate
