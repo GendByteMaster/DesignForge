@@ -11,6 +11,8 @@ from pathlib import Path
 from evidence_scanner import write_evidence
 from mapping_freshness import check as check_mapping_freshness
 from mapping_freshness import stamp as stamp_mapping_freshness
+from render_adapter import DEFAULT_TIMEOUT_SECONDS as DEFAULT_RENDER_TIMEOUT_SECONDS
+from render_adapter import run_adapter as run_render_adapter
 from state_machine import (
     VALID_MODES,
     VALID_STATUSES,
@@ -162,6 +164,25 @@ def cmd_visual(args: argparse.Namespace) -> int:
         assert destination is not None
         print(f"Visual QA artifact: {destination}")
         print(f"Visual evidence directory: {visual_evidence_dir(target, args.phase)}")
+        return 0
+
+    if args.action == "render":
+        artifact, errors = run_render_adapter(
+            target,
+            args.adapter,
+            args.surface,
+            args.state,
+            args.viewport,
+            args.phase,
+            args.timeout,
+        )
+        if errors:
+            for error in errors:
+                print(f"error: {error}", file=sys.stderr)
+            return 1
+        assert artifact is not None
+        print(f"Render artifact: {artifact}")
+        print("Inspect this artifact before registering it with 'designforge visual capture'.")
         return 0
 
     if args.action == "capture":
@@ -344,6 +365,8 @@ def validate_skill() -> list[str]:
         errors.append("missing mapping freshness checker")
     if not (scripts_dir / "visual_qa.py").exists():
         errors.append("missing visual QA validator")
+    if not (scripts_dir / "render_adapter.py").exists():
+        errors.append("missing renderer adapter runner")
     if not (ASSETS_DIR / "reviews" / "VISUAL_QA.md").exists():
         errors.append("missing visual QA template")
     return errors
@@ -427,6 +450,16 @@ def build_parser() -> argparse.ArgumentParser:
     visual_init_parser.add_argument("--phase")
     visual_init_parser.add_argument("--force", action="store_true", help="overwrite the managed VISUAL_QA.md scaffold")
     visual_init_parser.set_defaults(func=cmd_visual)
+
+    visual_render_parser = visual_subparsers.add_parser("render", help="run a renderer adapter and produce an uninspected staging artifact")
+    visual_render_parser.add_argument("target", nargs="?", default=".")
+    visual_render_parser.add_argument("--surface", required=True)
+    visual_render_parser.add_argument("--state", required=True)
+    visual_render_parser.add_argument("--viewport", required=True)
+    visual_render_parser.add_argument("--phase")
+    visual_render_parser.add_argument("--timeout", type=int, default=DEFAULT_RENDER_TIMEOUT_SECONDS)
+    visual_render_parser.add_argument("--adapter", nargs=argparse.REMAINDER, required=True, help="adapter argv; place this option last")
+    visual_render_parser.set_defaults(func=cmd_visual)
 
     visual_capture_parser = visual_subparsers.add_parser("capture", help="import a rendered screenshot or video and register it as inspected evidence")
     visual_capture_parser.add_argument("source")
