@@ -33,6 +33,35 @@ class VisualQATests(unittest.TestCase):
     def validate_visual(self, target: Path, *extra: str) -> subprocess.CompletedProcess[str]:
         return run(str(VISUAL_QA), "validate", str(target), *extra)
 
+    def capture_visual(
+        self,
+        target: Path,
+        source: Path,
+        *extra: str,
+        surface: str = "Dashboard",
+        state: str = "default",
+        viewport: str = "1440x900",
+    ) -> subprocess.CompletedProcess[str]:
+        return run(
+            str(VISUAL_QA),
+            "capture",
+            str(source),
+            str(target),
+            "--surface",
+            surface,
+            "--state",
+            state,
+            "--viewport",
+            viewport,
+            *extra,
+        )
+
+    def verdict_visual(self, target: Path, status: str, *extra: str) -> subprocess.CompletedProcess[str]:
+        return run(str(VISUAL_QA), "verdict", status, str(target), *extra)
+
+    def write_png(self, path: Path) -> None:
+        path.write_bytes(b"\x89PNG\r\n\x1a\nrender-evidence")
+
     def mark_capture(self, target: Path, evidence: str, status: str = "pass") -> Path:
         review = target / ".DesignForge" / "reviews" / "VISUAL_QA.md"
         text = review.read_text(encoding="utf-8")
@@ -131,7 +160,7 @@ class VisualQATests(unittest.TestCase):
             self.init_target(target)
             self.assertEqual(self.init_visual(target).returncode, 0)
             evidence = target / ".DesignForge" / "reviews" / "visual-evidence" / "dashboard.png"
-            evidence.write_bytes(b"\x89PNG\r\n\x1a\nrender-evidence")
+            self.write_png(evidence)
             self.mark_capture(target, ".DesignForge/reviews/visual-evidence/dashboard.png")
 
             result = self.validate_visual(target)
@@ -180,7 +209,7 @@ class VisualQATests(unittest.TestCase):
             self.init_target(target)
             self.assertEqual(self.init_visual(target).returncode, 0)
             evidence = target / "dashboard.png"
-            evidence.write_bytes(b"\x89PNG\r\n\x1a\nrender-evidence")
+            self.write_png(evidence)
             self.mark_capture(target, "dashboard.png")
 
             result = self.validate_visual(target)
@@ -210,6 +239,124 @@ class VisualQATests(unittest.TestCase):
             result = self.validate_visual(target)
             self.assertEqual(result.returncode, 1)
             self.assertIn("unsupported render format", result.stderr)
+
+    def test_capture_handoff_copies_external_render_and_registers_checked_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "project"
+            target.mkdir()
+            self.init_target(target)
+            source = Path(tmp) / "shot.png"
+            self.write_png(source)
+
+            result = self.capture_visual(target, source)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            managed = target / ".DesignForge" / "reviews" / "visual-evidence" / "dashboard-default.png"
+            self.assertTrue(managed.is_file())
+            review = target / ".DesignForge" / "reviews" / "VISUAL_QA.md"
+            text = review.read_text(encoding="utf-8")
+            self.assertIn("- [x] Surface: Dashboard | State: default | Viewport: 1440x900", text)
+            self.assertIn(".DesignForge/reviews/visual-evidence/dashboard-default.png", text)
+            self.assertEqual(self.validate_visual(target).returncode, 0)
+
+    def test_capture_handoff_avoids_overwriting_existing_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "project"
+            target.mkdir()
+            self.init_target(target)
+            first = Path(tmp) / "first.png"
+            second = Path(tmp) / "second.png"
+            self.write_png(first)
+            self.write_png(second)
+
+            self.assertEqual(self.capture_visual(target, first).returncode, 0)
+            self.assertEqual(self.capture_visual(target, second).returncode, 0)
+
+            evidence = target / ".DesignForge" / "reviews" / "visual-evidence"
+            self.assertTrue((evidence / "dashboard-default.png").is_file())
+            self.assertTrue((evidence / "dashboard-default-2.png").is_file())
+            review_text = (target / ".DesignForge" / "reviews" / "VISUAL_QA.md").read_text(encoding="utf-8")
+            self.assertIn("dashboard-default.png", review_text)
+            self.assertIn("dashboard-default-2.png", review_text)
+
+    def test_capture_handoff_rejects_invalid_media_before_scaffolding_review(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "project"
+            target.mkdir()
+            self.init_target(target)
+            source = Path(tmp) / "fake.png"
+            source.write_bytes(b"not-a-png")
+
+            result = self.capture_visual(target, source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("invalid render signature", result.stderr)
+            self.assertFalse((target / ".DesignForge" / "reviews" / "VISUAL_QA.md").exists())
+
+    def test_capture_handoff_rejects_reserved_markdown_delimiters(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "project"
+            target.mkdir()
+            self.init_target(target)
+            source = Path(tmp) / "shot.png"
+            self.write_png(source)
+
+            result = self.capture_visual(target, source, surface="Dashboard | injected")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("reserved by the Visual QA capture format", result.stderr)
+
+    def test_phase_capture_handoff_uses_phase_evidence_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "project"
+            target.mkdir()
+            self.init_target(target)
+            phase = run(str(CLI), "phase", "Main Workspace", "--target", str(target))
+            self.assertEqual(phase.returncode, 0, phase.stderr)
+            source = Path(tmp) / "shot.png"
+            self.write_png(source)
+
+            result = self.capture_visual(target, source, "--phase", "01-main-workspace")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            managed = target / ".DesignForge" / "phases" / "01-main-workspace" / "visual-evidence" / "dashboard-default.png"
+            self.assertTrue(managed.is_file())
+            validated = self.validate_visual(target, "--phase", "01-main-workspace")
+            self.assertEqual(validated.returncode, 0, validated.stderr)
+
+    def test_conclusive_verdict_without_capture_is_rejected_and_rolled_back(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.init_target(target)
+            self.assertEqual(self.init_visual(target).returncode, 0)
+
+            result = self.verdict_visual(target, "pass")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("requires at least one inspected render artifact", result.stderr)
+            review = target / ".DesignForge" / "reviews" / "VISUAL_QA.md"
+            self.assertIn("Status: pending", review.read_text(encoding="utf-8"))
+
+    def test_conclusive_verdict_after_capture_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "project"
+            target.mkdir()
+            self.init_target(target)
+            source = Path(tmp) / "shot.png"
+            self.write_png(source)
+            self.assertEqual(self.capture_visual(target, source).returncode, 0)
+
+            result = self.verdict_visual(target, "pass")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            review = target / ".DesignForge" / "reviews" / "VISUAL_QA.md"
+            self.assertIn("Status: pass", review.read_text(encoding="utf-8"))
+            self.assertEqual(self.validate_visual(target).returncode, 0)
+
+    def test_blocked_verdict_does_not_require_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.init_target(target)
+
+            result = self.verdict_visual(target, "blocked")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            review = target / ".DesignForge" / "reviews" / "VISUAL_QA.md"
+            self.assertIn("Status: blocked", review.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
