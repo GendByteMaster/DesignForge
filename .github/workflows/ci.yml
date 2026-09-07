@@ -43,6 +43,7 @@ jobs:
           python -m py_compile designforge/scripts/mapping_freshness.py
           python -m py_compile designforge/scripts/visual_qa.py
           python -m py_compile designforge/scripts/render_adapter.py
+          python -m py_compile designforge/scripts/render_staging.py
           python -m py_compile designforge/adapters/playwright_browser.py
 
       - name: Validate runtime package
