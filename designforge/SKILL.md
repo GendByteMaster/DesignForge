@@ -33,10 +33,11 @@ At minimum, workflows may create and maintain:
 - `system/` — detailed tokens, components, layout, motion, and accessibility contracts.
 - `phases/` — phase context, plans, implementation notes, reviews, results, and phase-scoped visual evidence.
 - `reviews/` — product-wide visual, accessibility, consistency, drift, and visual-evidence reviews.
+- `render-staging/` — uninspected renderer-adapter output awaiting explicit inspection and optional capture registration.
 
 Create artifacts progressively. Do not generate every possible file when it would add noise.
 
-See [workflow reference](references/WORKFLOW.md), [artifact contracts](references/ARTIFACTS.md), and [visual QA evidence contract](references/VISUAL_QA.md).
+See [workflow reference](references/WORKFLOW.md), [artifact contracts](references/ARTIFACTS.md), [visual QA evidence contract](references/VISUAL_QA.md), and [renderer adapter contract](references/RENDER_ADAPTER.md).
 
 ## Redesign freedom modes
 
@@ -137,24 +138,28 @@ A visual phase is not complete merely because code compiles or tests pass.
 
 When browser, emulator, simulator, screenshot, or other render-inspection tooling is available:
 
-1. initialize product-wide or phase-scoped Visual QA with `designforge visual init`;
-2. render the affected UI;
-3. save render evidence beside `VISUAL_QA.md` under the corresponding `visual-evidence/` directory;
-4. inspect hierarchy, spacing, alignment, typography, contrast, density, component states, responsive behavior, and obvious accessibility problems;
-5. mark a capture checked only after the referenced render artifact was actually inspected;
-6. compare the result against `.DesignForge/DESIGN.md` and relevant system contracts;
-7. record findings and accessibility observations;
-8. fix material defects when the active workflow permits implementation;
-9. re-render affected states after fixes;
-10. set an accurate Visual QA verdict and run `designforge visual validate` before claiming visual QA completed.
+1. initialize product-wide or phase-scoped Visual QA with `designforge visual init` when an evidence artifact is needed;
+2. render the affected UI with tooling available in the runtime;
+3. when a compatible explicit renderer adapter is available, prefer `designforge visual render` to produce an uninspected staging artifact; otherwise direct renderer output is acceptable;
+4. inspect the exact render artifact before making any inspected-evidence claim;
+5. after inspection, register it through `designforge visual capture`, which persists it under the corresponding managed `visual-evidence/` directory and creates the checked capture row;
+6. inspect hierarchy, spacing, alignment, typography, contrast, density, component states, responsive behavior, and obvious accessibility problems;
+7. compare the result against `.DesignForge/DESIGN.md` and relevant system contracts;
+8. record findings and accessibility observations;
+9. fix material defects when the active workflow permits implementation;
+10. re-render and re-inspect affected states after fixes, then register fresh captures for materially changed states;
+11. set the verdict through `designforge visual verdict` rather than editing a conclusive status blindly;
+12. run `designforge visual validate` before claiming visual QA completed.
 
-`pass`, `pass-with-notes`, and `fail` require at least one checked capture backed by a real, non-empty render artifact. Compilation, tests, or source inspection alone are not visual evidence.
+`visual render` and `visual capture` are intentionally separate. A renderer produces candidate evidence but cannot certify that inspection occurred. Do not call `visual capture` until the exact artifact has actually been viewed and assessed.
+
+`pass`, `pass-with-notes`, and `fail` require at least one checked capture backed by a real, non-empty render artifact. Compilation, tests, source inspection, or renderer success alone are not visual evidence.
 
 When visual tooling is unavailable, use an explicit `blocked` or `unavailable` verdict and record the limitation instead of pretending visual validation occurred.
 
-The render provider is intentionally not fixed. Use browser, native preview, emulator, simulator, screenshot, or equivalent tooling available in the current runtime while keeping the same persistent evidence contract.
+The render provider is intentionally not fixed. Use browser, native preview, emulator, simulator, screenshot, or equivalent tooling available in the current runtime while keeping the same persistent evidence contract. Do not require a provider-specific dependency when the runtime already has another suitable renderer.
 
-See [visual QA evidence contract](references/VISUAL_QA.md).
+See [visual QA evidence contract](references/VISUAL_QA.md) and [renderer adapter contract](references/RENDER_ADAPTER.md).
 
 ## Workflow selection
 
@@ -197,6 +202,7 @@ Before declaring design work complete, verify that:
 - responsive behavior was considered when applicable;
 - accessibility constraints were not knowingly regressed;
 - visual inspection was performed when tooling allowed it;
+- renderer output was not treated as inspected evidence until the exact artifact was reviewed and registered through the Visual QA capture handoff;
 - any claimed conclusive visual verdict is backed by persistent inspected render evidence and passes `designforge visual validate`;
 - phase review/result artifacts are current;
 - `STATE.md` accurately describes what is complete and what remains.
