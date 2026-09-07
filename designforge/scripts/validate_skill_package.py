@@ -27,6 +27,14 @@ MAPPING_SECTIONS = (
     "## Unknowns",
     "## Evidence index",
 )
+VISUAL_QA_SECTIONS = (
+    "## Scope",
+    "## Capture matrix",
+    "## Findings",
+    "## Accessibility observations",
+    "## Unverified states",
+    "## Verdict",
+)
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, str], list[str]]:
@@ -97,6 +105,24 @@ def validate_mapping_resources(errors: list[str]) -> None:
             errors.append(f"missing {label}: scripts/{filename}")
 
 
+def validate_visual_resources(errors: list[str]) -> None:
+    template = SKILL_ROOT / "assets" / "reviews" / "VISUAL_QA.md"
+    if not template.is_file():
+        errors.append("missing visual QA template: assets/reviews/VISUAL_QA.md")
+    else:
+        text = template.read_text(encoding="utf-8")
+        if not text.startswith("# Visual QA"):
+            errors.append("assets/reviews/VISUAL_QA.md must start with '# Visual QA'")
+        for heading in VISUAL_QA_SECTIONS:
+            if heading not in text:
+                errors.append(f"assets/reviews/VISUAL_QA.md is missing {heading}")
+        if "Status: pending" not in text:
+            errors.append("assets/reviews/VISUAL_QA.md must default to Status: pending")
+
+    if not (SKILL_ROOT / "scripts" / "visual_qa.py").is_file():
+        errors.append("missing visual QA validator: scripts/visual_qa.py")
+
+
 def validate() -> list[str]:
     errors: list[str] = []
 
@@ -149,6 +175,7 @@ def validate() -> list[str]:
             errors.append(f"missing skill resource directory: {required_dir}/")
 
     validate_mapping_resources(errors)
+    validate_visual_resources(errors)
     return errors
 
 
