@@ -14,16 +14,18 @@ Roadmap: [Issue #1 — DesignForge v0.1 persistent design workflow engine](https
 
 DesignForge intentionally separates the distributable skill package from project-local runtime state:
 
-- `designforge/` — Agent Skills-compatible package distributed with DesignForge.
+- `designforge/` — portable Agent Skills package distributed with DesignForge.
 - `.DesignForge/` — persistent design memory created inside a target software project.
 
-This keeps the skill reusable while allowing each product to maintain its own design context, roadmap, decisions, system contracts, reviews, and resumable state.
+This keeps the design workflow provider-neutral while allowing each coding agent to discover the same skill package through its own project-local skills directory.
 
 ## Skill package
 
 ```text
 designforge/
 ├── SKILL.md
+├── agents/
+│   └── openai.yaml
 ├── assets/
 │   ├── PROJECT.md
 │   ├── STATE.md
@@ -37,7 +39,10 @@ designforge/
 ├── scripts/
 │   ├── designforge.py
 │   ├── evidence_scanner.py
-│   └── state_machine.py
+│   ├── installer.py
+│   ├── install_skill.py
+│   ├── state_machine.py
+│   └── validate_skill_package.py
 └── workflows/
     ├── INIT.md
     ├── MAP.md
@@ -50,6 +55,46 @@ designforge/
     ├── CONTINUE.md
     └── GUARD.md
 ```
+
+`SKILL.md` keeps portable skill metadata limited to `name` and `description`. OpenAI-specific interface metadata lives separately in `agents/openai.yaml` so provider details do not leak into the core skill contract.
+
+## Coding-agent installation
+
+DesignForge currently supports explicit **project-local** installation for Codex and Claude Code.
+
+### Codex
+
+```bash
+python designforge/scripts/install_skill.py codex /path/to/project
+```
+
+Installs a real copy of the skill at:
+
+```text
+/path/to/project/.agents/skills/designforge/
+```
+
+### Claude Code
+
+```bash
+python designforge/scripts/install_skill.py claude /path/to/project
+```
+
+Installs a real copy of the skill at:
+
+```text
+/path/to/project/.claude/skills/designforge/
+```
+
+The installer does not use symlinks. Existing installations are preserved by default. To intentionally replace an existing project-local copy:
+
+```bash
+python designforge/scripts/install_skill.py codex /path/to/project --force
+```
+
+Replacement is staged before the existing installation is swapped, reducing the chance of leaving a partially copied skill behind.
+
+Global/user installation is intentionally not part of this v0.1 layer yet. Project-local paths are explicit and reproducible; user-level Codex conventions are still evolving, so DesignForge does not hardcode an ambiguous global destination.
 
 ## Lifecycle
 
@@ -246,25 +291,31 @@ Supported workflows:
 - `continue`
 - `guard`
 
-### Validate
+## Validation
 
-Validate the DesignForge skill package:
+Validate runtime/workflow structure:
 
 ```bash
 python designforge/scripts/designforge.py validate
 ```
 
-Validate the skill package and a target project's persistent workspace:
+Validate the canonical portable Agent Skills package and OpenAI interface metadata:
+
+```bash
+python designforge/scripts/validate_skill_package.py
+```
+
+Validate runtime structure plus a target project's persistent workspace:
 
 ```bash
 python designforge/scripts/designforge.py validate --target /path/to/project
 ```
 
-Validation checks:
+Validation covers:
 
-- core Skill metadata;
-- required workflow and asset files;
-- required operational scripts;
+- canonical `SKILL.md` metadata;
+- required `agents/openai.yaml` interface metadata;
+- required workflow, asset, reference, and script resources;
 - valid mode/workflow/status values;
 - agreement between `PROJECT.md` and `STATE.md` redesign modes;
 - existence of an active phase directory when one is referenced.
@@ -292,7 +343,7 @@ DesignForge supports three freedom levels:
 
 ## Development verification
 
-CI validates the operational layer on Python 3.11, 3.12, and 3.13.
+CI validates the operational and installation layers on Python 3.11, 3.12, and 3.13.
 
 Local checks:
 
@@ -300,11 +351,25 @@ Local checks:
 python -m py_compile designforge/scripts/designforge.py
 python -m py_compile designforge/scripts/state_machine.py
 python -m py_compile designforge/scripts/evidence_scanner.py
+python -m py_compile designforge/scripts/installer.py
+python -m py_compile designforge/scripts/install_skill.py
+python -m py_compile designforge/scripts/validate_skill_package.py
 python designforge/scripts/designforge.py validate
+python designforge/scripts/validate_skill_package.py
 python -m unittest discover -s tests -v
 ```
 
-The test suite includes an end-to-end lifecycle against a representative React/Vite-style project fixture:
+The test suite includes:
+
+- persistent workspace initialization and idempotency;
+- workflow state transitions and forced recovery;
+- phase scaffolding;
+- deterministic UI/codebase evidence scanning;
+- Codex and Claude project-local skill installation;
+- installation conflict/force behavior;
+- an end-to-end lifecycle against a representative React/Vite-style project fixture.
+
+End-to-end lifecycle:
 
 ```text
 init
@@ -321,6 +386,6 @@ init
 
 ## Current development focus
 
-The v0.1 foundation now includes persistent artifacts, idempotent initialization, phase scaffolding, deterministic workflow transitions, structural validation, deterministic UI/codebase evidence collection, CI, and an end-to-end lifecycle test.
+The v0.1 foundation now includes persistent artifacts, idempotent initialization, phase scaffolding, deterministic workflow transitions, structural validation, deterministic UI/codebase evidence collection, canonical skill-package validation, project-local Codex/Claude installation, CI, and an end-to-end lifecycle test.
 
-The next development layer should focus on coding-agent installation/adoption and the first real DesignForge run against an external software project with rendered visual QA. The scanner should remain an evidence collector rather than evolve into an unreliable heuristic design judge.
+The next major proof point is the first real DesignForge run against an external software project with rendered visual QA. The scanner should remain an evidence collector rather than evolve into an unreliable heuristic design judge.
