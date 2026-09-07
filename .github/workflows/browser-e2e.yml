@@ -1,0 +1,52 @@
+name: Browser E2E
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev/master
+    paths:
+      - "designforge/adapters/playwright_browser.py"
+      - "designforge/scripts/designforge.py"
+      - "designforge/scripts/render_adapter.py"
+      - "designforge/scripts/render_staging.py"
+      - "designforge/scripts/visual_qa.py"
+      - "tests/test_playwright_real_e2e.py"
+      - ".github/workflows/browser-e2e.yml"
+  pull_request:
+    paths:
+      - "designforge/adapters/playwright_browser.py"
+      - "designforge/scripts/designforge.py"
+      - "designforge/scripts/render_adapter.py"
+      - "designforge/scripts/render_staging.py"
+      - "designforge/scripts/visual_qa.py"
+      - "tests/test_playwright_real_e2e.py"
+      - ".github/workflows/browser-e2e.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  chromium-e2e:
+    name: Chromium visual pipeline
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Playwright
+        run: python -m pip install "playwright==1.62.0"
+
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Run real browser E2E
+        env:
+          DESIGNFORGE_REAL_BROWSER_E2E: "1"
+        run: python -m unittest discover -s tests -p "test_playwright_real_e2e.py" -v
