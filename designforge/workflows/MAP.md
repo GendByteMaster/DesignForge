@@ -4,7 +4,7 @@ Map an existing product UI before redesign work.
 
 ## Goal
 
-Create a trustworthy UI-focused view of the codebase so later design decisions are grounded in repository reality.
+Create a trustworthy UI-focused view of the codebase so later design decisions are grounded in repository reality and can be detected when they become stale.
 
 ## Reads
 
@@ -35,6 +35,10 @@ The agent creates only useful interpreted files under `.DesignForge/codebase/`, 
 - `CONCERNS.md`
 
 Use the canonical provenance-aware templates under `designforge/assets/codebase/` when creating these artifacts. Each interpreted mapping artifact separates `Verified findings`, `Inferences`, `Unknowns`, and an `Evidence index`.
+
+After interpreted mapping has passed provenance validation, DesignForge may create:
+
+- `MAP_STATE.md` — generated mechanical freshness baseline for the verified map; not a design artifact.
 
 Update `.DesignForge/STATE.md`.
 
@@ -78,7 +82,19 @@ Update `.DesignForge/STATE.md`.
    ```
 
    Fix structural provenance failures before declaring mapping complete. Passing this validator confirms the document contract and presence of evidence references; it does not prove semantic correctness.
-15. Update `STATE.md` with mapping completion, material concerns, and next workflow.
+15. After provenance validation passes and the source evidence has been rechecked, stamp the mapping freshness baseline:
+
+   ```bash
+   python designforge/scripts/designforge.py mapping stamp /path/to/project
+   ```
+
+   This writes `.DesignForge/codebase/MAP_STATE.md` with content digests for cited sources and interpreted mapping artifacts, plus a Git/UI-change baseline when Git is available.
+16. Immediately verify the stamped baseline when practical:
+
+   ```bash
+   python designforge/scripts/designforge.py mapping check /path/to/project
+   ```
+17. Update `STATE.md` with mapping completion, material concerns, and next workflow.
 
 ## Scanner scope
 
@@ -145,6 +161,29 @@ Therefore:
 - prefer stable repository paths plus symbols/selectors/routes/tests over fragile line-only citations;
 - re-check mappings after material codebase changes before reusing them in a redesign plan.
 
+## Freshness boundary
+
+`MAP_STATE.md` detects mechanical reasons a saved interpreted map may no longer represent repository reality. A freshness check becomes stale when, for example:
+
+- a cited source file changes or disappears;
+- an interpreted mapping artifact changes after the baseline was stamped;
+- the set of UI-relevant working-tree changes differs from the stamped baseline;
+- UI-relevant committed files changed after the mapped Git commit.
+
+A different Git commit alone is not enough to invalidate the map. Non-UI drift such as documentation-only commits should not make the map stale when no mapped source or UI-relevant path changed.
+
+Freshness is also available without Git: cited source and mapping-artifact content digests still protect the baseline.
+
+If `mapping check` reports stale state:
+
+1. do not simply restamp the existing conclusions;
+2. inspect the reported source/UI changes;
+3. refresh only the affected interpreted mapping areas when possible;
+4. rerun provenance validation;
+5. stamp a new baseline only after the affected findings are current again.
+
+For older `.DesignForge/` workspaces with interpreted maps but no `MAP_STATE.md`, freshness is unknown rather than automatically invalid. If later workflows depend on the map, validate and stamp it before treating it as current.
+
 ## Rules
 
 - Do not redesign while mapping unless the user explicitly asks for immediate fixes.
@@ -153,8 +192,10 @@ Therefore:
 - Avoid exhaustive low-value inventories. Focus on elements that affect redesign decisions.
 - Repository reality overrides stale `.DesignForge/codebase/` documents.
 - Generated `EVIDENCE.md` may be refreshed by the scanner; do not store durable human decisions there.
+- Generated `MAP_STATE.md` is a freshness baseline; do not store design conclusions or user decisions there.
 - Never recursively inspect generated/dependency directories merely to increase manifest recall.
 - Never promote an inference to verified only because it appears plausible.
+- Never restamp a stale map merely to silence a freshness failure.
 
 ## Completion
 
@@ -170,4 +211,8 @@ Mapping is complete when a new agent can answer:
 - which statements are verified, inferred, or still unknown;
 - which repository evidence supports each substantive verified finding.
 
-When interpreted mapping artifacts exist and the validator is available, provenance validation must pass before the workflow is marked complete.
+When interpreted mapping artifacts exist and the relevant tooling is available:
+
+- provenance validation must pass;
+- `MAP_STATE.md` must be stamped only after source reinspection;
+- an immediate freshness check should pass before the mapping workflow is marked complete.
