@@ -134,6 +134,43 @@ python designforge/scripts/validate_mapping_artifacts.py /path/to/project
 
 It validates artifact structure and evidence presence for explicit verified list items. It does not attempt to judge whether an agent's interpretation is semantically correct.
 
+### MAP_STATE.md
+
+Purpose: generated mechanical freshness baseline for interpreted codebase mapping.
+
+`MAP_STATE.md` is not a design document and must not contain product decisions, design conclusions, or chat-derived context. It exists so a later run can detect that an otherwise well-formed map may no longer represent repository reality.
+
+When available, the freshness baseline records:
+
+- mapped Git commit;
+- UI-relevant working-tree paths present at stamp time;
+- SHA-256 digests for repository source paths cited by interpreted mapping artifacts;
+- SHA-256 digests for the interpreted mapping artifacts themselves.
+
+Create or refresh it only after:
+
+1. relevant source has been inspected;
+2. interpreted mapping findings are current;
+3. provenance validation passes.
+
+Canonical command:
+
+```bash
+python designforge/scripts/designforge.py mapping stamp /path/to/project
+```
+
+Verify before reusing a saved map as current truth:
+
+```bash
+python designforge/scripts/designforge.py mapping check /path/to/project
+```
+
+Freshness becomes stale when cited source or interpreted mapping content changes, or when relevant Git/worktree UI changes diverge from the mapped baseline. A documentation-only commit should not invalidate the map by itself.
+
+If a check is stale, inspect and refresh the affected findings before stamping again. Never regenerate `MAP_STATE.md` merely to hide stale mapping.
+
+Workspaces created before this contract may have interpreted mapping without `MAP_STATE.md`. Treat such mapping as freshness-unknown rather than automatically invalid; inspect and stamp it when a later workflow needs to rely on it.
+
 ### STACK.md
 
 Capture framework, styling system, UI libraries, routing, state management, animation libraries, icon system, fonts, and relevant build/test tooling.
@@ -292,5 +329,7 @@ Every artifact should be:
 - free of chat-only context;
 - explicit about assumptions;
 - readable by a new agent without conversation history.
+
+Generated mechanical artifacts such as `EVIDENCE.md` and `MAP_STATE.md` must remain mechanically scoped. Do not turn them into a second location for durable design decisions.
 
 Delete or consolidate artifacts that become redundant. Persistent context is valuable only when it remains trustworthy.
