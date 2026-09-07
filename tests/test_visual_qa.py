@@ -49,6 +49,19 @@ class VisualQATests(unittest.TestCase):
             self.assertTrue((target / ".DesignForge" / "reviews" / "VISUAL_QA.md").is_file())
             self.assertTrue((target / ".DesignForge" / "reviews" / "visual-evidence").is_dir())
 
+    def test_public_cli_exposes_visual_init_and_validate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.init_target(target)
+
+            initialized = run(str(CLI), "visual", "init", str(target))
+            self.assertEqual(initialized.returncode, 0, initialized.stderr)
+            self.assertIn("Visual QA artifact", initialized.stdout)
+
+            validated = run(str(CLI), "visual", "validate", str(target))
+            self.assertEqual(validated.returncode, 0, validated.stderr)
+            self.assertIn("visual QA validation passed", validated.stdout)
+
     def test_phase_init_targets_existing_phase(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)
