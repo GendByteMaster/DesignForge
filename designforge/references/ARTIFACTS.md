@@ -302,6 +302,26 @@ Useful implementation notes, file/component mapping, migration concerns, and tec
 
 Observed defects and review findings. Prefer severity plus evidence.
 
+### VISUAL_QA.md
+
+Purpose: persistent, evidence-backed visual inspection for the active phase.
+
+Use it when a phase has rendered UI that can be inspected. Its checked capture matrix records the inspected surface, state, viewport or native form factor, and the project-relative path to the render evidence.
+
+Phase-scoped render evidence belongs under:
+
+`phases/<phase>/visual-evidence/`
+
+A conclusive verdict (`pass`, `pass-with-notes`, or `fail`) requires at least one checked capture backed by a managed, non-empty render artifact whose lightweight media signature matches its declared format.
+
+Run the canonical validator before claiming phase Visual QA completed:
+
+```bash
+python designforge/scripts/designforge.py visual validate /path/to/project --phase <phase>
+```
+
+See `references/VISUAL_QA.md` for the complete evidence contract.
+
 ### RESULT.md
 
 What was actually implemented, checks performed, visual inspection status, unresolved issues, and follow-up work.
@@ -312,10 +332,22 @@ Use for cross-phase or product-wide review.
 
 Suggested files:
 
+- `VISUAL_QA.md`
 - `VISUAL_AUDIT.md`
 - `ACCESSIBILITY.md`
 - `CONSISTENCY.md`
 - `DRIFT.md`
+
+Product-wide `VISUAL_QA.md` uses the same evidence contract as phase-scoped Visual QA. Its managed render evidence belongs under:
+
+`.DesignForge/reviews/visual-evidence/`
+
+Initialize and validate it with:
+
+```bash
+python designforge/scripts/designforge.py visual init /path/to/project
+python designforge/scripts/designforge.py visual validate /path/to/project
+```
 
 Do not duplicate identical findings across multiple review artifacts. Reference the canonical finding when practical.
 
@@ -330,6 +362,6 @@ Every artifact should be:
 - explicit about assumptions;
 - readable by a new agent without conversation history.
 
-Generated mechanical artifacts such as `EVIDENCE.md` and `MAP_STATE.md` must remain mechanically scoped. Do not turn them into a second location for durable design decisions.
+Generated mechanical artifacts such as `EVIDENCE.md` and `MAP_STATE.md` must remain mechanically scoped. Render media under `visual-evidence/` is evidence, not a second location for design decisions or review prose.
 
 Delete or consolidate artifacts that become redundant. Persistent context is valuable only when it remains trustworthy.
