@@ -18,8 +18,11 @@ from state_machine import (
     allowed_targets,
     can_transition,
 )
+from visual_qa import VALID_STATUSES as VALID_VISUAL_STATUSES
 from visual_qa import evidence_dir as visual_evidence_dir
 from visual_qa import init_review as init_visual_review
+from visual_qa import register_capture as register_visual_capture
+from visual_qa import set_verdict as set_visual_verdict
 from visual_qa import validate_review as validate_visual_review
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
@@ -159,6 +162,32 @@ def cmd_visual(args: argparse.Namespace) -> int:
         assert destination is not None
         print(f"Visual QA artifact: {destination}")
         print(f"Visual evidence directory: {visual_evidence_dir(target, args.phase)}")
+        return 0
+
+    if args.action == "capture":
+        destination, errors = register_visual_capture(
+            target,
+            Path(args.source),
+            args.surface,
+            args.state,
+            args.viewport,
+            args.phase,
+        )
+        if errors:
+            for error in errors:
+                print(f"error: {error}", file=sys.stderr)
+            return 1
+        assert destination is not None
+        print(f"Visual capture registered: {destination}")
+        return 0
+
+    if args.action == "verdict":
+        errors = set_visual_verdict(target, args.status, args.phase)
+        if errors:
+            for error in errors:
+                print(f"error: {error}", file=sys.stderr)
+            return 1
+        print(f"Visual QA verdict: {args.status}")
         return 0
 
     errors = validate_visual_review(target, args.phase)
@@ -390,12 +419,34 @@ def build_parser() -> argparse.ArgumentParser:
     mapping_parser.add_argument("target", nargs="?", default=".")
     mapping_parser.set_defaults(func=cmd_mapping)
 
-    visual_parser = subparsers.add_parser("visual", help="scaffold or validate provider-neutral visual QA evidence")
-    visual_parser.add_argument("action", choices=("init", "validate"))
-    visual_parser.add_argument("target", nargs="?", default=".")
-    visual_parser.add_argument("--phase")
-    visual_parser.add_argument("--force", action="store_true", help="overwrite the managed VISUAL_QA.md scaffold during init")
-    visual_parser.set_defaults(func=cmd_visual)
+    visual_parser = subparsers.add_parser("visual", help="manage provider-neutral visual QA evidence")
+    visual_subparsers = visual_parser.add_subparsers(dest="action", required=True)
+
+    visual_init_parser = visual_subparsers.add_parser("init", help="scaffold a Visual QA artifact and managed evidence directory")
+    visual_init_parser.add_argument("target", nargs="?", default=".")
+    visual_init_parser.add_argument("--phase")
+    visual_init_parser.add_argument("--force", action="store_true", help="overwrite the managed VISUAL_QA.md scaffold")
+    visual_init_parser.set_defaults(func=cmd_visual)
+
+    visual_capture_parser = visual_subparsers.add_parser("capture", help="import a rendered screenshot or video and register it as inspected evidence")
+    visual_capture_parser.add_argument("source")
+    visual_capture_parser.add_argument("target", nargs="?", default=".")
+    visual_capture_parser.add_argument("--surface", required=True)
+    visual_capture_parser.add_argument("--state", required=True)
+    visual_capture_parser.add_argument("--viewport", required=True)
+    visual_capture_parser.add_argument("--phase")
+    visual_capture_parser.set_defaults(func=cmd_visual)
+
+    visual_verdict_parser = visual_subparsers.add_parser("verdict", help="set a validated Visual QA verdict")
+    visual_verdict_parser.add_argument("status", choices=sorted(VALID_VISUAL_STATUSES))
+    visual_verdict_parser.add_argument("target", nargs="?", default=".")
+    visual_verdict_parser.add_argument("--phase")
+    visual_verdict_parser.set_defaults(func=cmd_visual)
+
+    visual_validate_parser = visual_subparsers.add_parser("validate", help="validate a Visual QA artifact and its checked render evidence")
+    visual_validate_parser.add_argument("target", nargs="?", default=".")
+    visual_validate_parser.add_argument("--phase")
+    visual_validate_parser.set_defaults(func=cmd_visual)
 
     phase_parser = subparsers.add_parser("phase", help="create a numbered DesignForge phase")
     phase_parser.add_argument("name")
