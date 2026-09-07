@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "designforge" / "scripts" / "designforge.py"
 VISUAL_QA = ROOT / "designforge" / "scripts" / "visual_qa.py"
+CAPTURE_TEMPLATE = "- [ ] Surface: <!-- name --> | State: <!-- default, hover, focus, loading, error, empty, etc. --> | Viewport: <!-- width x height, device, window size, or native form factor --> | Evidence: `<!-- project-relative .png/.jpg/.jpeg/.webp/.gif/.mp4/.webm path -->`"
 
 
 def run(*args: str) -> subprocess.CompletedProcess[str]:
@@ -31,6 +32,16 @@ class VisualQATests(unittest.TestCase):
 
     def validate_visual(self, target: Path, *extra: str) -> subprocess.CompletedProcess[str]:
         return run(str(VISUAL_QA), "validate", str(target), *extra)
+
+    def mark_capture(self, target: Path, evidence: str, status: str = "pass") -> Path:
+        review = target / ".DesignForge" / "reviews" / "VISUAL_QA.md"
+        text = review.read_text(encoding="utf-8")
+        text = text.replace(
+            CAPTURE_TEMPLATE,
+            f"- [x] Surface: Dashboard | State: default | Viewport: 1440x900 | Evidence: `{evidence}`",
+        ).replace("Status: pending", f"Status: {status}")
+        review.write_text(text, encoding="utf-8")
+        return review
 
     def test_init_requires_designforge_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -108,49 +119,67 @@ class VisualQATests(unittest.TestCase):
             target = Path(tmp)
             self.init_target(target)
             self.assertEqual(self.init_visual(target).returncode, 0)
-            review = target / ".DesignForge" / "reviews" / "VISUAL_QA.md"
-            text = review.read_text(encoding="utf-8")
-            text = text.replace(
-                "- [ ] Surface: <!-- name --> | State: <!-- default, hover, focus, loading, error, empty, etc. --> | Viewport: <!-- width x height, device, window size, or native form factor --> | Evidence: `<!-- project-relative .png/.jpg/.jpeg/.webp/.gif/.mp4/.webm path -->`",
-                "- [x] Surface: Dashboard | State: default | Viewport: 1440x900 | Evidence: `.DesignForge/reviews/visual-evidence/dashboard.png`",
-            ).replace("Status: pending", "Status: pass")
-            review.write_text(text, encoding="utf-8")
+            self.mark_capture(target, ".DesignForge/reviews/visual-evidence/dashboard.png")
 
             result = self.validate_visual(target)
             self.assertEqual(result.returncode, 1)
             self.assertIn("evidence file not found", result.stderr)
 
-    def test_checked_capture_with_nonempty_render_evidence_passes(self) -> None:
+    def test_checked_capture_with_png_signature_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self.init_target(target)
+            self.assertEqual(self.init_visual(target).returncode, 0)
+            evidence = target / ".DesignForge" / "reviews" / "visual-evidence" / "dashboard.png"
+            evidence.write_bytes(b"\x89PNG\r\n\x1a\nrender-evidence")
+            self.mark_capture(target, ".DesignForge/reviews/visual-evidence/dashboard.png")
+
+            result = self.validate_visual(target)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_checked_capture_rejects_fake_png_payload(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)
             self.init_target(target)
             self.assertEqual(self.init_visual(target).returncode, 0)
             evidence = target / ".DesignForge" / "reviews" / "visual-evidence" / "dashboard.png"
             evidence.write_bytes(b"render-evidence")
-
-            review = target / ".DesignForge" / "reviews" / "VISUAL_QA.md"
-            text = review.read_text(encoding="utf-8")
-            text = text.replace(
-                "- [ ] Surface: <!-- name --> | State: <!-- default, hover, focus, loading, error, empty, etc. --> | Viewport: <!-- width x height, device, window size, or native form factor --> | Evidence: `<!-- project-relative .png/.jpg/.jpeg/.webp/.gif/.mp4/.webm path -->`",
-                "- [x] Surface: Dashboard | State: default | Viewport: 1440x900 | Evidence: `.DesignForge/reviews/visual-evidence/dashboard.png`",
-            ).replace("Status: pending", "Status: pass")
-            review.write_text(text, encoding="utf-8")
+            self.mark_capture(target, ".DesignForge/reviews/visual-evidence/dashboard.png")
 
             result = self.validate_visual(target)
-            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("invalid render signature", result.stderr)
+
+    def test_supported_render_signatures_are_accepted(self) -> None:
+        cases = {
+            "capture.png": b"\x89PNG\r\n\x1a\nrest",
+            "capture.jpg": b"\xff\xd8\xff\xe0rest",
+            "capture.jpeg": b"\xff\xd8\xff\xe1rest",
+            "capture.gif": b"GIF89arest",
+            "capture.webp": b"RIFF\x08\x00\x00\x00WEBPrest",
+            "capture.mp4": b"\x00\x00\x00\x18ftypisomrest",
+            "capture.webm": b"\x1a\x45\xdf\xa3rest",
+        }
+
+        for filename, payload in cases.items():
+            with self.subTest(filename=filename), tempfile.TemporaryDirectory() as tmp:
+                target = Path(tmp)
+                self.init_target(target)
+                self.assertEqual(self.init_visual(target).returncode, 0)
+                relative = f".DesignForge/reviews/visual-evidence/{filename}"
+                evidence = target / relative
+                evidence.write_bytes(payload)
+                self.mark_capture(target, relative)
+
+                result = self.validate_visual(target)
+                self.assertEqual(result.returncode, 0, f"{filename}: {result.stderr}")
 
     def test_checked_capture_rejects_path_traversal(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)
             self.init_target(target)
             self.assertEqual(self.init_visual(target).returncode, 0)
-            review = target / ".DesignForge" / "reviews" / "VISUAL_QA.md"
-            text = review.read_text(encoding="utf-8")
-            text = text.replace(
-                "- [ ] Surface: <!-- name --> | State: <!-- default, hover, focus, loading, error, empty, etc. --> | Viewport: <!-- width x height, device, window size, or native form factor --> | Evidence: `<!-- project-relative .png/.jpg/.jpeg/.webp/.gif/.mp4/.webm path -->`",
-                "- [x] Surface: Dashboard | State: default | Viewport: 1440x900 | Evidence: `../outside.png`",
-            ).replace("Status: pending", "Status: pass")
-            review.write_text(text, encoding="utf-8")
+            self.mark_capture(target, "../outside.png")
 
             result = self.validate_visual(target)
             self.assertEqual(result.returncode, 1)
@@ -163,13 +192,7 @@ class VisualQATests(unittest.TestCase):
             self.assertEqual(self.init_visual(target).returncode, 0)
             evidence = target / ".DesignForge" / "reviews" / "visual-evidence" / "dashboard.txt"
             evidence.write_text("not render evidence", encoding="utf-8")
-            review = target / ".DesignForge" / "reviews" / "VISUAL_QA.md"
-            text = review.read_text(encoding="utf-8")
-            text = text.replace(
-                "- [ ] Surface: <!-- name --> | State: <!-- default, hover, focus, loading, error, empty, etc. --> | Viewport: <!-- width x height, device, window size, or native form factor --> | Evidence: `<!-- project-relative .png/.jpg/.jpeg/.webp/.gif/.mp4/.webm path -->`",
-                "- [x] Surface: Dashboard | State: default | Viewport: 1440x900 | Evidence: `.DesignForge/reviews/visual-evidence/dashboard.txt`",
-            ).replace("Status: pending", "Status: pass")
-            review.write_text(text, encoding="utf-8")
+            self.mark_capture(target, ".DesignForge/reviews/visual-evidence/dashboard.txt")
 
             result = self.validate_visual(target)
             self.assertEqual(result.returncode, 1)
