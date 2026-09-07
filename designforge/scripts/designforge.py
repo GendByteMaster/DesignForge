@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 
 from evidence_scanner import write_evidence
+from mapping_freshness import check as check_mapping_freshness
+from mapping_freshness import stamp as stamp_mapping_freshness
 from state_machine import (
     VALID_MODES,
     VALID_STATUSES,
@@ -114,6 +116,29 @@ def cmd_scan(args: argparse.Namespace) -> int:
     except FileNotFoundError as exc:
         return fail(str(exc))
     print(f"Codebase evidence: {destination}")
+    return 0
+
+
+def cmd_mapping(args: argparse.Namespace) -> int:
+    target = Path(args.target).resolve()
+    if not target.exists() or not target.is_dir():
+        return fail(f"target directory does not exist: {target}")
+
+    if args.action == "stamp":
+        errors = stamp_mapping_freshness(target)
+        if errors:
+            for error in errors:
+                print(f"error: {error}", file=sys.stderr)
+            return 1
+        print("DesignForge mapping freshness baseline stamped")
+        return 0
+
+    errors = check_mapping_freshness(target)
+    if errors:
+        for error in errors:
+            print(f"stale: {error}", file=sys.stderr)
+        return 1
+    print("DesignForge mapping freshness check passed")
     return 0
 
 
@@ -258,6 +283,8 @@ def validate_skill() -> list[str]:
         errors.append("missing operational state machine")
     if not (scripts_dir / "evidence_scanner.py").exists():
         errors.append("missing codebase evidence scanner")
+    if not (scripts_dir / "mapping_freshness.py").exists():
+        errors.append("missing mapping freshness checker")
     return errors
 
 
@@ -325,6 +352,11 @@ def build_parser() -> argparse.ArgumentParser:
     scan_parser = subparsers.add_parser("scan", help="collect deterministic UI/codebase evidence for the map workflow")
     scan_parser.add_argument("target", nargs="?", default=".")
     scan_parser.set_defaults(func=cmd_scan)
+
+    mapping_parser = subparsers.add_parser("mapping", help="stamp or check interpreted mapping freshness")
+    mapping_parser.add_argument("action", choices=("stamp", "check"))
+    mapping_parser.add_argument("target", nargs="?", default=".")
+    mapping_parser.set_defaults(func=cmd_mapping)
 
     phase_parser = subparsers.add_parser("phase", help="create a numbered DesignForge phase")
     phase_parser.add_argument("name")
