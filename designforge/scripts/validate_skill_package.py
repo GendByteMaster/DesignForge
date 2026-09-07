@@ -158,6 +158,7 @@ def validate_visual_resources(errors: list[str]) -> None:
     scripts = {
         "visual QA validator": "visual_qa.py",
         "renderer adapter runner": "render_adapter.py",
+        "render staging manager": "render_staging.py",
     }
     for label, filename in scripts.items():
         if not (SKILL_ROOT / "scripts" / filename).is_file():
