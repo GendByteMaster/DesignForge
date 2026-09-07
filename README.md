@@ -32,17 +32,20 @@ designforge/
 │   ├── ROADMAP.md
 │   ├── DESIGN.md
 │   ├── DESIGN_SYSTEM.md
-│   └── codebase/
-│       ├── STACK.md
-│       ├── UI_ARCHITECTURE.md
-│       ├── COMPONENTS.md
-│       ├── STYLES.md
-│       ├── SCREENS.md
-│       └── CONCERNS.md
+│   ├── codebase/
+│   │   ├── STACK.md
+│   │   ├── UI_ARCHITECTURE.md
+│   │   ├── COMPONENTS.md
+│   │   ├── STYLES.md
+│   │   ├── SCREENS.md
+│   │   └── CONCERNS.md
+│   └── reviews/
+│       └── VISUAL_QA.md
 ├── references/
 │   ├── WORKFLOW.md
 │   ├── STATE_MACHINE.md
-│   └── ARTIFACTS.md
+│   ├── ARTIFACTS.md
+│   └── VISUAL_QA.md
 ├── scripts/
 │   ├── designforge.py
 │   ├── evidence_scanner.py
@@ -51,7 +54,8 @@ designforge/
 │   ├── mapping_freshness.py
 │   ├── state_machine.py
 │   ├── validate_mapping_artifacts.py
-│   └── validate_skill_package.py
+│   ├── validate_skill_package.py
+│   └── visual_qa.py
 └── workflows/
     ├── INIT.md
     ├── MAP.md
@@ -140,7 +144,7 @@ The lifecycle is resumable. A workflow may skip stages that are already complete
 - **Persistent state over chat memory** — durable decisions live in `.DesignForge/`.
 - **Design system by default** — tokens, components, states, layout, motion, and accessibility are first-class contracts.
 - **Accessibility is a hard constraint** — visual originality must not reduce usability or semantics.
-- **Visual QA is required when tooling allows** — compiling is not enough for visual work.
+- **Visual QA requires evidence** — when rendering is available, visual claims must be backed by inspected persistent render artifacts rather than compilation or source inspection alone.
 - **Progressive context loading** — load `STATE.md`, the active phase, and only relevant design contracts.
 - **Guard against design drift** — recent changes should be checked against the active design system and Design DNA.
 - **Evidence before conclusions** — deterministic scanners may collect repository signals, but agents must verify relevant source before turning signals into design findings.
@@ -170,7 +174,19 @@ A target project may progressively create a workspace such as:
 ├── research/
 ├── system/
 ├── phases/
+│   └── 01-main-workspace/
+│       ├── CONTEXT.md
+│       ├── RESEARCH.md
+│       ├── PLAN.md
+│       ├── DESIGN.md
+│       ├── IMPLEMENTATION.md
+│       ├── REVIEW.md
+│       ├── RESULT.md
+│       ├── VISUAL_QA.md
+│       └── visual-evidence/
 └── reviews/
+    ├── VISUAL_QA.md
+    └── visual-evidence/
 ```
 
 Not every file or directory should be created immediately. DesignForge creates artifacts only when they become useful.
@@ -185,10 +201,12 @@ Not every file or directory should be created immediately. DesignForge creates a
 - `codebase/EVIDENCE.md` — refreshable scanner output containing observable repository signals, not durable design conclusions.
 - interpreted `codebase/*.md` maps — durable source-verified codebase understanding with explicit provenance and uncertainty boundaries.
 - `codebase/MAP_STATE.md` — generated freshness baseline for interpreted mapping; contains mechanical hashes/Git state, not design decisions.
+- `reviews/VISUAL_QA.md` or `phases/<phase>/VISUAL_QA.md` — persistent visual inspection contract and verdict.
+- sibling `visual-evidence/` — managed screenshots or render recordings referenced by checked Visual QA captures.
 
 ## Operational toolkit
 
-DesignForge includes a dependency-free Python CLI for deterministic workspace operations. The agent workflows remain the design intelligence layer; the CLI handles mechanical state, evidence collection, provenance support, and mapping freshness checks that should not depend on prompt behavior.
+DesignForge includes a dependency-free Python CLI for deterministic workspace operations. The agent workflows remain the design intelligence layer; the CLI handles mechanical state, evidence collection, provenance support, mapping freshness, and Visual QA evidence validation that should not depend on prompt behavior.
 
 Requirements: Python 3.11+.
 
@@ -336,7 +354,49 @@ This creates a numbered phase such as:
 └── RESULT.md
 ```
 
-and moves `STATE.md` to the new phase planning state.
+and moves `STATE.md` to the new phase planning state. Phase-scoped `VISUAL_QA.md` and `visual-evidence/` are created only when visual inspection becomes relevant.
+
+### Record and validate Visual QA
+
+Visual QA is provider-neutral. DesignForge does not require one browser, screenshot API, simulator, emulator, or native preview provider. The active runtime renders the UI; DesignForge persists and validates the evidence contract.
+
+Initialize product-wide Visual QA:
+
+```bash
+python designforge/scripts/designforge.py visual init /path/to/project
+```
+
+This creates:
+
+```text
+.DesignForge/reviews/
+├── VISUAL_QA.md
+└── visual-evidence/
+```
+
+For an active phase:
+
+```bash
+python designforge/scripts/designforge.py visual init /path/to/project --phase 01-main-workspace
+```
+
+After rendering and inspecting the affected states, save evidence under the associated managed `visual-evidence/` directory, mark only actually inspected captures as checked, set an accurate verdict, and validate it:
+
+```bash
+python designforge/scripts/designforge.py visual validate /path/to/project
+```
+
+or:
+
+```bash
+python designforge/scripts/designforge.py visual validate /path/to/project --phase 01-main-workspace
+```
+
+A conclusive verdict (`pass`, `pass-with-notes`, or `fail`) requires at least one checked capture backed by managed render evidence. Mechanical validation checks that the evidence path is project-relative, remains inside the associated `visual-evidence/` directory, uses a supported format, exists, is non-empty, and has a lightweight media signature matching the declared PNG/JPEG/GIF/WebP/MP4/WebM format.
+
+The validator deliberately does not judge visual quality, accessibility correctness, screenshot semantics, or full media decodability. Those remain agent inspection responsibilities. If the runtime cannot render or inspect the UI, record `blocked` or `unavailable` rather than claiming successful visual validation.
+
+See [`designforge/references/VISUAL_QA.md`](designforge/references/VISUAL_QA.md) for the complete evidence contract.
 
 ### Low-level state recovery
 
@@ -397,6 +457,18 @@ Check whether an already-stamped interpreted map is still current:
 python designforge/scripts/designforge.py mapping check /path/to/project
 ```
 
+Validate product-wide Visual QA evidence:
+
+```bash
+python designforge/scripts/designforge.py visual validate /path/to/project
+```
+
+Validate phase-scoped Visual QA evidence:
+
+```bash
+python designforge/scripts/designforge.py visual validate /path/to/project --phase 01-main-workspace
+```
+
 Validate runtime structure plus a target project's persistent workspace:
 
 ```bash
@@ -411,11 +483,13 @@ Validation covers:
 - required provenance-aware mapping templates and their common sections;
 - presence of the mapping provenance validator and freshness checker in the portable skill package;
 - mapping evidence presence for substantive verified findings;
+- required Visual QA template, validator, and reference contract resources;
+- Visual QA document structure, verdict values, managed evidence containment, supported render formats, non-empty evidence, and lightweight media signatures when `visual validate` is run;
 - valid mode/workflow/status values;
 - agreement between `PROJECT.md` and `STATE.md` redesign modes;
 - existence of an active phase directory when one is referenced.
 
-Mapping freshness remains an explicit check rather than a global workspace-validation failure because UI implementation work can intentionally make a previously valid map stale.
+Mapping freshness and Visual QA remain explicit checks rather than unconditional global workspace-validation failures because implementation work can intentionally stale a map and not every runtime can render every UI surface.
 
 ## Redesign modes
 
@@ -433,8 +507,8 @@ DesignForge supports three freedom levels:
 - `direct` — create or refine the product-specific visual/UX direction.
 - `systemize` — translate the direction into design-system contracts.
 - `plan` — build a bounded, visually verifiable roadmap and phase plan.
-- `build` — implement the active phase and perform technical + visual validation.
-- `review` — perform evidence-based visual, UX, accessibility, and system review.
+- `build` — implement the active phase, produce render evidence when tooling allows, and perform technical + visual validation.
+- `review` — perform evidence-based visual, UX, accessibility, and system review using persistent render evidence when available.
 - `continue` — resume from persistent state with minimal rediscovery and verify required mapping freshness before reuse.
 - `guard` — detect design-system drift in recent or proposed UI changes.
 
@@ -453,6 +527,7 @@ python -m py_compile designforge/scripts/install_skill.py
 python -m py_compile designforge/scripts/validate_skill_package.py
 python -m py_compile designforge/scripts/validate_mapping_artifacts.py
 python -m py_compile designforge/scripts/mapping_freshness.py
+python -m py_compile designforge/scripts/visual_qa.py
 python designforge/scripts/designforge.py validate
 python designforge/scripts/validate_skill_package.py
 python -m unittest discover -s tests -v
@@ -473,6 +548,11 @@ The test suite includes:
 - UI-relevant committed/worktree freshness detection;
 - non-UI Git drift false-positive protection;
 - non-Git digest-based freshness behavior;
+- product-wide and phase-scoped Visual QA scaffolding;
+- public `designforge visual init|validate` CLI coverage;
+- conclusive Visual QA verdict evidence requirements;
+- managed visual-evidence path containment;
+- supported PNG/JPEG/GIF/WebP/MP4/WebM signature checks and fake-media rejection;
 - Codex and Claude project-local skill installation;
 - installation conflict/force behavior;
 - an end-to-end lifecycle against a representative React/Vite-style project fixture.
@@ -497,6 +577,8 @@ direct
   -> systemize
   -> phase/plan
   -> build
+  -> render/capture when available
+  -> visual validate
   -> review
   -> guard
   -> validate
@@ -504,6 +586,6 @@ direct
 
 ## Current development focus
 
-The v0.1 foundation now includes persistent artifacts, idempotent initialization, phase scaffolding, deterministic workflow transitions, structural validation, bounded multi-stack UI/codebase evidence collection, provenance-aware interpreted mapping, mapping freshness baselines and stale-map detection, canonical skill-package validation, project-local Codex/Claude installation, CI, and an end-to-end lifecycle test.
+The v0.1 foundation now includes persistent artifacts, idempotent initialization, phase scaffolding, deterministic workflow transitions, structural validation, bounded multi-stack UI/codebase evidence collection, provenance-aware interpreted mapping, mapping freshness baselines and stale-map detection, canonical skill-package validation, project-local Codex/Claude installation, provider-neutral persistent Visual QA evidence contracts, product-wide and phase-scoped Visual QA CLI operations, managed render-evidence validation, CI, and an end-to-end lifecycle test.
 
-The next major proof point is **rendered visual QA**: DesignForge should connect `build` and `review` workflows to real rendered evidence when the runtime provides browser, screenshot, emulator, simulator, or native-app inspection tooling. That layer should verify hierarchy, spacing, responsive behavior, clipping/overflow, interaction states, focus visibility, and design-system drift without making DesignForge depend on any single rendering provider.
+The next major proof point is **renderer/capture adapter integration**: environments with browser, screenshot, emulator, simulator, or native-app tooling should be able to produce managed Visual QA evidence automatically, while DesignForge keeps the core workflow and evidence contract provider-neutral. That layer should exercise real rendered states end-to-end and make it easier for `build` and `review` to close the render -> inspect -> fix -> re-render loop without hardcoding one rendering provider.
