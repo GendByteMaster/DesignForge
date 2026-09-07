@@ -49,6 +49,8 @@ STYLE_EXTENSIONS = {".css", ".scss", ".sass", ".less", ".styl"}
 MAX_TEXT_FILE_BYTES = 1_000_000
 MAX_FILES = 10_000
 MAX_LIST_ITEMS = 60
+MAX_MANIFESTS = 100
+MAX_MANIFEST_DEPTH = 3
 
 MANIFESTS = (
     "package.json",
@@ -144,23 +146,51 @@ def read_text(path: Path) -> str | None:
         return None
 
 
-def load_package_json(root: Path) -> tuple[dict[str, str], str | None]:
-    package_path = root / "package.json"
-    if not package_path.exists():
-        return {}, None
-    try:
-        raw = json.loads(package_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return {}, "package.json exists but could not be parsed as JSON"
+def discover_manifests(paths: list[str]) -> list[str]:
+    """Return known manifests from the bounded repository file inventory.
 
+    Discovery deliberately reuses ``iter_repo_files`` output instead of starting
+    an independent recursive glob. This preserves the same exclusions and file
+    cap while supporting common layouts such as ``desktop/package.json`` and
+    ``apps/web/package.json``.
+    """
+
+    manifests: list[str] = []
+    for path in paths:
+        candidate = Path(path)
+        if candidate.name not in MANIFESTS:
+            continue
+        directory_depth = len(candidate.parts) - 1
+        if directory_depth > MAX_MANIFEST_DEPTH:
+            continue
+        manifests.append(path)
+        if len(manifests) >= MAX_MANIFESTS:
+            break
+    return manifests
+
+
+def load_package_jsons(root: Path, manifests: Iterable[str]) -> tuple[dict[str, str], list[str]]:
     packages: dict[str, str] = {}
-    for section in ("dependencies", "devDependencies", "peerDependencies"):
-        values = raw.get(section, {})
-        if isinstance(values, dict):
-            for name, version in values.items():
-                if isinstance(name, str):
-                    packages[name] = str(version)
-    return packages, None
+    errors: list[str] = []
+
+    for relative in manifests:
+        if Path(relative).name != "package.json":
+            continue
+        package_path = root / relative
+        try:
+            raw = json.loads(package_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            errors.append(f"`{relative}` exists but could not be parsed as JSON")
+            continue
+
+        for section in ("dependencies", "devDependencies", "peerDependencies"):
+            values = raw.get(section, {})
+            if isinstance(values, dict):
+                for name, version in values.items():
+                    if isinstance(name, str):
+                        packages[name] = str(version)
+
+    return packages, errors
 
 
 def package_matches(packages: dict[str, str]) -> dict[str, list[str]]:
@@ -176,17 +206,21 @@ def package_matches(packages: dict[str, str]) -> dict[str, list[str]]:
     return result
 
 
-def detect_platform_signals(root: Path, paths: list[str]) -> list[str]:
+def detect_platform_signals(paths: list[str], manifests: Iterable[str]) -> list[str]:
     found: list[str] = []
-    path_set = set(paths)
-    if "pubspec.yaml" in path_set:
+    manifest_names = {Path(path).name for path in manifests}
+    if "pubspec.yaml" in manifest_names:
         found.append("Flutter/Dart manifest (`pubspec.yaml`)")
-    if "Cargo.toml" in path_set:
+    if "Cargo.toml" in manifest_names:
         found.append("Rust manifest (`Cargo.toml`)")
-    if "pyproject.toml" in path_set or "requirements.txt" in path_set:
+    if "pyproject.toml" in manifest_names or "requirements.txt" in manifest_names:
         found.append("Python project manifest")
-    if "package.json" in path_set:
+    if "package.json" in manifest_names:
         found.append("Node.js package manifest (`package.json`)")
+    if "composer.json" in manifest_names:
+        found.append("PHP/Composer manifest (`composer.json`)")
+    if "go.mod" in manifest_names:
+        found.append("Go module manifest (`go.mod`)")
     if any(path.startswith("ios/") for path in paths):
         found.append("iOS project directory")
     if any(path.startswith("android/") for path in paths):
@@ -288,10 +322,10 @@ def markdown_list(items: Iterable[str], empty: str = "None detected") -> list[st
 def build_evidence_report(root: Path) -> str:
     files = iter_repo_files(root)
     paths = relative_paths(root, files)
-    manifests = [name for name in MANIFESTS if (root / name).exists()]
-    packages, package_error = load_package_json(root)
+    manifests = discover_manifests(paths)
+    packages, package_errors = load_package_jsons(root, manifests)
     package_groups = package_matches(packages)
-    platform_signals = detect_platform_signals(root, paths)
+    platform_signals = detect_platform_signals(paths, manifests)
     extension_counts = summarize_extensions(files)
     structure = detect_structure(paths)
     style_signals = scan_style_signals(files)
@@ -307,9 +341,11 @@ def build_evidence_report(root: Path) -> str:
         f"- Files inspected: **{len(files)}**",
         f"- File cap: **{MAX_FILES}**",
         f"- Maximum text file size: **{MAX_TEXT_FILE_BYTES} bytes**",
+        f"- Manifest discovery depth: **{MAX_MANIFEST_DEPTH} directories**",
+        f"- Manifest cap: **{MAX_MANIFESTS}**",
         "- Excluded generated/dependency directories: " + ", ".join(f"`{name}`" for name in sorted(EXCLUDED_DIRS)),
         "",
-        "## Root manifests",
+        "## Detected manifests",
         "",
         *markdown_list(manifests),
         "",
@@ -319,7 +355,7 @@ def build_evidence_report(root: Path) -> str:
     lines.extend(f"- {item}" for item in platform_signals or ["None detected from known manifests/directories"])
 
     lines.extend(["", "## Detected package signals", ""])
-    if package_error:
+    for package_error in package_errors:
         lines.append(f"- Warning: {package_error}")
     if package_groups:
         for category in sorted(package_groups):
@@ -327,7 +363,7 @@ def build_evidence_report(root: Path) -> str:
             lines.append("")
             lines.extend(f"- {item}" for item in package_groups[category])
             lines.append("")
-    elif not package_error:
+    elif not package_errors:
         lines.append("- No known frontend package signals detected")
         lines.append("")
 
