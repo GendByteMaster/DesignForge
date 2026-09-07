@@ -33,6 +33,22 @@ class SkillPackageContractTests(unittest.TestCase):
             with self.subTest(heading=heading):
                 self.assertIn(heading, reference_text)
 
+    def test_playwright_browser_adapter_is_a_portable_optional_provider(self) -> None:
+        validator = load_validator()
+        adapter = ROOT / "designforge" / "adapters" / "playwright_browser.py"
+        reference = ROOT / "designforge" / "references" / "BROWSER_ADAPTER.md"
+        self.assertTrue(adapter.is_file())
+        self.assertTrue(reference.is_file())
+
+        reference_text = reference.read_text(encoding="utf-8")
+        for heading in validator.BROWSER_ADAPTER_REFERENCE_SECTIONS:
+            with self.subTest(heading=heading):
+                self.assertIn(heading, reference_text)
+
+        adapter_text = adapter.read_text(encoding="utf-8")
+        self.assertNotIn("import playwright", adapter_text.split("def main", 1)[0])
+        self.assertIn("designforge-render-adapter-v1", adapter_text)
+
     def test_visual_qa_reference_requires_capture_handoff(self) -> None:
         validator = load_validator()
         self.assertIn("## Capture handoff", validator.VISUAL_QA_REFERENCE_SECTIONS)
