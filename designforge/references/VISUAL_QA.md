@@ -10,11 +10,19 @@ Product-wide artifact:
 
 ` .DesignForge/reviews/VISUAL_QA.md `
 
+Product-wide evidence directory:
+
+` .DesignForge/reviews/visual-evidence/ `
+
 Phase-scoped artifact:
 
 ` .DesignForge/phases/<phase>/VISUAL_QA.md `
 
-Associated render evidence lives beside the artifact in a `visual-evidence/` directory.
+Phase-scoped evidence directory:
+
+` .DesignForge/phases/<phase>/visual-evidence/ `
+
+Checked captures must reference evidence inside the managed `visual-evidence/` directory associated with that Visual QA artifact. Do not point a checked capture at unrelated images or media elsewhere in the project.
 
 ## Canonical commands
 
@@ -63,6 +71,8 @@ Supported evidence formats are:
 - `.mp4`
 - `.webm`
 
+The file extension is not trusted by itself. DesignForge also performs a bounded magic-byte sanity check for the declared media format. This is intentionally lightweight and does not replace full image or video decoding.
+
 ## Verdicts
 
 Allowed verdict status values:
@@ -87,18 +97,20 @@ The validator checks:
 - presence of a capture-matrix item;
 - checked captures contain non-placeholder surface, state, viewport, and evidence values;
 - evidence paths are project-relative and do not escape the project;
+- evidence lives inside the managed `visual-evidence/` directory for the active product-wide or phase-scoped Visual QA artifact;
 - evidence uses a supported render format;
 - referenced evidence exists and is non-empty;
+- evidence header bytes match the declared render format at a lightweight signature level;
 - conclusive visual verdicts are backed by at least one inspected capture.
 
-The validator does not judge visual quality, design taste, accessibility correctness, or whether a screenshot semantically proves a finding. Those remain agent inspection responsibilities.
+The validator does not judge visual quality, design taste, accessibility correctness, whether a screenshot semantically proves a finding, or whether media is fully decodable. Those remain agent inspection responsibilities.
 
 ## Workflow rules
 
 During `build` and `review`:
 
 1. render the affected state using whatever provider/runtime is available;
-2. save the render artifact under the appropriate `visual-evidence/` directory;
+2. save the render artifact under the appropriate managed `visual-evidence/` directory;
 3. inspect the artifact;
 4. mark the capture checked only after inspection;
 5. record findings and accessibility observations;
