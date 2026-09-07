@@ -92,6 +92,36 @@ Staging is intentionally separate from checked `visual-evidence/` directories. A
 
 Invalid adapter runs remove their run-specific staging directory. Successful artifacts remain available so the agent can inspect the exact output before deciding whether to register it.
 
+List managed staging runs with:
+
+```bash
+python designforge/scripts/designforge.py visual staging list /path/to/project
+```
+
+Cleanup is intentionally explicit and never occurs merely because rendering, capture, or validation succeeded:
+
+```bash
+python designforge/scripts/designforge.py visual staging clean /path/to/project \
+  --run <run-id>
+```
+
+or:
+
+```bash
+python designforge/scripts/designforge.py visual staging clean /path/to/project \
+  --older-than-hours 24
+```
+
+or, only when all pending managed staging runs may be discarded:
+
+```bash
+python designforge/scripts/designforge.py visual staging clean /path/to/project --all
+```
+
+Staging cleanup operates only on canonical direct-child run directories. Unknown entries and symbolic links are not managed runs, and persistent `visual-evidence/` is never part of staging cleanup.
+
+See [render staging lifecycle](RENDER_STAGING.md) for the complete safety contract.
+
 ## Adapter result rules
 
 A valid adapter must:
@@ -129,6 +159,8 @@ python designforge/scripts/designforge.py visual capture \
 ```
 
 `visual capture` copies the inspected artifact into the appropriate managed evidence directory and writes the checked capture row. This separation is a core integrity rule: render generation and visual-inspection claims are different operations.
+
+After successful capture, the original staging run may be removed explicitly. Removing the staging source must not remove the persistent captured evidence.
 
 ## Provider neutrality
 
