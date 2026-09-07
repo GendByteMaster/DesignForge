@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -27,6 +28,52 @@ class VisualPublicCLITests(unittest.TestCase):
 
     def write_png(self, path: Path) -> None:
         path.write_bytes(b"\x89PNG\r\n\x1a\nrender-evidence")
+
+    def test_public_cli_render_produces_uninspected_staging_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "project"
+            target.mkdir()
+            self.init_target(target)
+            adapter = root / "adapter.py"
+            adapter.write_text(
+                textwrap.dedent(
+                    """
+                    import json
+                    import os
+                    from pathlib import Path
+
+                    output = Path(os.environ["DESIGNFORGE_OUTPUT_DIR"]) / "render.png"
+                    output.write_bytes(b"\\x89PNG\\r\\n\\x1a\\nrender")
+                    print(json.dumps({
+                        "protocol": os.environ["DESIGNFORGE_RENDER_PROTOCOL"],
+                        "artifact": "render.png",
+                    }))
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            rendered = run(
+                "visual",
+                "render",
+                str(target),
+                "--surface",
+                "Dashboard",
+                "--state",
+                "default",
+                "--viewport",
+                "1440x900",
+                "--adapter",
+                sys.executable,
+                str(adapter),
+            )
+            self.assertEqual(rendered.returncode, 0, rendered.stderr)
+            self.assertIn("Render artifact:", rendered.stdout)
+            self.assertIn("Inspect this artifact", rendered.stdout)
+            self.assertFalse((target / ".DesignForge" / "reviews" / "VISUAL_QA.md").exists())
+            artifacts = list((target / ".DesignForge" / "render-staging").glob("*/render.png"))
+            self.assertEqual(len(artifacts), 1)
 
     def test_public_cli_capture_registers_managed_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
