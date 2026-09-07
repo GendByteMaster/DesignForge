@@ -39,11 +39,24 @@ VISUAL_QA_REFERENCE_SECTIONS = (
     "# Visual QA Evidence Contract",
     "## Scope",
     "## Canonical commands",
+    "## Capture handoff",
     "## Capture matrix",
     "## Verdicts",
     "## Mechanical validation",
     "## Workflow rules",
     "## Provider neutrality",
+)
+RENDER_ADAPTER_REFERENCE_SECTIONS = (
+    "# Renderer Adapter Contract",
+    "## Boundary",
+    "## Public command",
+    "## Protocol",
+    "## Supported artifacts",
+    "## Staging",
+    "## Adapter result rules",
+    "## Inspection handoff",
+    "## Provider neutrality",
+    "## Security and execution model",
 )
 
 
@@ -129,8 +142,13 @@ def validate_visual_resources(errors: list[str]) -> None:
         if "Status: pending" not in text:
             errors.append("assets/reviews/VISUAL_QA.md must default to Status: pending")
 
-    if not (SKILL_ROOT / "scripts" / "visual_qa.py").is_file():
-        errors.append("missing visual QA validator: scripts/visual_qa.py")
+    scripts = {
+        "visual QA validator": "visual_qa.py",
+        "renderer adapter runner": "render_adapter.py",
+    }
+    for label, filename in scripts.items():
+        if not (SKILL_ROOT / "scripts" / filename).is_file():
+            errors.append(f"missing {label}: scripts/{filename}")
 
     reference = SKILL_ROOT / "references" / "VISUAL_QA.md"
     if not reference.is_file():
@@ -140,6 +158,15 @@ def validate_visual_resources(errors: list[str]) -> None:
         for heading in VISUAL_QA_REFERENCE_SECTIONS:
             if heading not in reference_text:
                 errors.append(f"references/VISUAL_QA.md is missing {heading}")
+
+    renderer_reference = SKILL_ROOT / "references" / "RENDER_ADAPTER.md"
+    if not renderer_reference.is_file():
+        errors.append("missing renderer adapter reference contract: references/RENDER_ADAPTER.md")
+    else:
+        renderer_text = renderer_reference.read_text(encoding="utf-8")
+        for heading in RENDER_ADAPTER_REFERENCE_SECTIONS:
+            if heading not in renderer_text:
+                errors.append(f"references/RENDER_ADAPTER.md is missing {heading}")
 
 
 def validate() -> list[str]:
